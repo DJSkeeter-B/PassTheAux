@@ -1,0 +1,126 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Google Sign-In Example — PassTheAux</title>
+  <style>
+    body {
+      font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      padding: 20px
+    }
+
+    button {
+      margin: 6px
+    }
+  </style>
+</head>
+
+<body>
+  <h2>Google Sign-In Example (Firebase v9 modular)</h2>
+  <p>Use this page to test Google sign-in, read the user's Firestore doc (`users/{uid}`), and call the protected HTTP
+    function.</p>
+
+  <div id="status">Not signed in</div>
+  <button id="googleSignIn">Sign in with Google</button>
+  <button id="signOut" style="display:none">Sign out</button>
+  <pre id="info"></pre>
+
+  <script type="module">
+    import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js';
+    import { getAuth, GoogleAuthProvider, signInWithPopup, signOut, onAuthStateChanged, connectAuthEmulator } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js';
+    import { getFirestore, doc, getDoc, connectFirestoreEmulator } from 'https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js';
+
+    // --- Firebase app config ---
+    const firebaseConfig = {
+      apiKey: 'AIzaSyAzqQHR766ju98ZsvGQ9wF_DSeQvXoea1g',
+      authDomain: 'passtheaux-f0585.firebaseapp.com',
+      projectId: 'passtheaux-f0585',
+      storageBucket: 'passtheaux-f0585.firebasestorage.app',
+      messagingSenderId: '903610325003',
+      appId: '1:903610325003:web:8c2b07b1fb02a10d14cf0e'
+    };
+
+    // Initialize
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+
+    // If you're running the emulator locally, uncomment and set the correct ports:
+    // connectAuthEmulator(auth, 'http://localhost:9099'); // or 9299 as your emulator uses
+    // connectFirestoreEmulator(db, 'localhost', 8080);
+
+    const provider = new GoogleAuthProvider();
+
+    const statusEl = document.getElementById('status');
+    const infoEl = document.getElementById('info');
+    const signInBtn = document.getElementById('googleSignIn');
+    const signOutBtn = document.getElementById('signOut');
+
+    function show(obj) { infoEl.textContent = JSON.stringify(obj, null, 2); }
+
+    signInBtn.onclick = async () => {
+      try {
+        const result = await signInWithPopup(auth, provider);
+        // result.user is signed in
+        console.log('Signed in', result.user.uid);
+      } catch (err) {
+        console.error(err);
+        alert('Sign-in error: ' + (err.message || err));
+      }
+    };
+
+    signOutBtn.onclick = async () => {
+      await signOut(auth);
+    };
+
+    onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        statusEl.textContent = `Signed in as ${user.email} (uid: ${user.uid})`;
+        signInBtn.style.display = 'none';
+        signOutBtn.style.display = '';
+
+        // Get ID token
+        const idToken = await user.getIdToken();
+
+        // Read users/{uid} doc to check role (this repo stores role there)
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const snapshot = await getDoc(userDocRef);
+          if (snapshot.exists()) {
+            show({ user: { uid: user.uid, email: user.email }, userDoc: snapshot.data() });
+          } else {
+            show({ user: { uid: user.uid, email: user.email }, userDoc: null });
+          }
+        } catch (err) {
+          console.error('Failed to read user doc', err);
+          show({ error: 'Failed to read user doc', details: String(err) });
+        }
+
+        // Example: call protected function with ID token
+        try {
+          const res = await fetch('https://refreshspotifytokenhttp-3pkk43mtxq-uc.a.run.app', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + idToken, 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          });
+          const json = await res.json().catch(() => ({ status: res.status }));
+          console.log('Function response', res.status, json);
+          show({ functionCall: { status: res.status, body: json } });
+        } catch (err) {
+          console.error('Function call failed', err);
+        }
+
+      } else {
+        statusEl.textContent = 'Not signed in';
+        signInBtn.style.display = '';
+        signOutBtn.style.display = 'none';
+        show({});
+      }
+    });
+
+  </script>
+</body>
+
+</html>
