@@ -9,11 +9,12 @@ import { EventQueuePage } from './src/pages/EventQueuePage';
 import { EventSearchPage } from './src/pages/EventSearchPage';
 import { AdminDashboardPage } from './src/pages/AdminDashboardPage';
 import { DjHubPage } from './src/pages/DjHubPage';
-import { DjDashboardPage } from './src/pages/DjDashboardPage';
-// NEW: Import BottomNav
 import { BottomNav } from './src/components/BottomNav';
 import { GlobalHeader } from './src/components/GlobalHeader';
 import { ProfilePage } from './src/pages/ProfilePage';
+
+// Proxied import via DjDashboardPage later...
+// import { DjDashboardPage } from './src/pages/DjDashboardPage';
 
 /*
     Route Guard Component
@@ -29,11 +30,15 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, all
 };
 
 export default function App() {
+    console.log("App Component Rendering...");
     return (
         <AuthProvider>
             <DataProvider>
                 <BrowserRouter>
-                    <div className="max-w-md mx-auto min-h-screen bg-slate-950 text-white shadow-2xl relative pb-24 pt-16">
+                    <div
+                        className="max-w-md mx-auto min-h-screen bg-slate-950 text-white shadow-2xl relative pb-24 pt-16"
+                        ref={(el) => { if (el) console.log("Main App Container Mounted"); }}
+                    >
                         <GlobalHeader />
                         <Routes>
                             <Route path="/login" element={<AuthPage />} />
@@ -74,11 +79,11 @@ export default function App() {
                                 </ProtectedRoute>
                             } />
 
-                            <Route path="/dj/event/:id" element={
+                            {/* <Route path="/dj/event/:id" element={
                                 <ProtectedRoute allowedRoles={['DJ', 'ADMIN']}>
                                     <DjDashboardPage />
                                 </ProtectedRoute>
-                            } />
+                            } /> */}
 
                             <Route path="/profile" element={
                                 <ProtectedRoute>
@@ -90,7 +95,6 @@ export default function App() {
                             <Route path="*" element={<Navigate to="/" replace />} />
                         </Routes>
 
-                        {/* Persistent Bottom Navigation */}
                         <BottomNav />
                     </div>
                 </BrowserRouter>

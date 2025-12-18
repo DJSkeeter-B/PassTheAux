@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Search, Loader2 } from 'lucide-react';
@@ -42,9 +43,60 @@ export const EventSearchPage: React.FC = () => {
         setHasMore(true);
     }, [searchQuery]);
 
+    // Load Lexicon Data
+    const [lexiconLibrary, setLexiconLibrary] = useState<any[]>([]);
+
+    useEffect(() => {
+        const loadLexicon = async () => {
+            try {
+                // @ts-ignore
+                const module = await import('../data/lexicon-library.json');
+                // Check structure: module.default is the array usually in JSON import
+                // Or if saved as object { tracks: [] }? Scripts saved as simple array?
+                // scripts/sync-library.js: fs.writeFileSync(..., JSON.stringify(uniqueTracks, ...))
+                // So it is an array.
+                setLexiconLibrary((module.default || module) as any[]);
+            } catch (e) {
+                console.warn("Lexicon library not found or failed to load", e);
+            }
+        };
+        loadLexicon();
+    }, []);
+
+    // Need to fetch Event Config to know if we should search Spotify/Lexicon
+    const [eventConfig, setEventConfig] = useState<{ allowSpotify?: boolean, allowLexicon?: boolean } | null>(null);
+
+    useEffect(() => {
+        if (!id) return;
+
+        const fetchConfig = async () => {
+            try {
+                // Dynamic import for firebase stuff is tricky with types, better to rely on service or top level.
+                // But let's fix the require error first.
+                // We'll use the 'db' from firebaseConfig if exported, or just use 'getDoc' from firestore
+                const { doc, getDoc } = await import('firebase/firestore');
+                const { db } = await import('../../firebaseConfig');
+
+                if (db) {
+                    const snap = await getDoc(doc(db, "events", id));
+                    if (snap.exists()) {
+                        const data = snap.data();
+                        setEventConfig({
+                            allowSpotify: data.allowSpotifySearch !== false,
+                            allowLexicon: data.allowLexiconSearch === true
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load event config", e);
+            }
+        };
+        fetchConfig();
+    }, [id]);
+
     // Fetch Effect (Handles both initial search and pagination)
     useEffect(() => {
-        if (!searchQuery.trim()) {
+        if (!searchQuery.trim() || !eventConfig) { // Wait for config
             setSearchResults([]);
             return;
         }
@@ -61,23 +113,55 @@ export const EventSearchPage: React.FC = () => {
         const fetchSongs = async () => {
             setIsSearching(true);
             try {
-                let results: SearchResult[] = [];
+                let combinedResults: SearchResult[] = [];
+                let lexiconMatches: SearchResult[] = [];
+                let spotifyMatches: SearchResult[] = [];
 
-                // Spotify Search
-                if (config.spotifyToken) {
-                    try {
-                        results = await searchSpotify(searchQuery, config.spotifyToken, offset);
-                    } catch (spotifyError) {
-                        if (offset === 0) {
-                            console.warn("Spotify failed, falling back to Gemini", spotifyError);
-                            results = await searchSongs(searchQuery);
-                        }
-                    }
-                } else if (offset === 0) {
-                    results = await searchSongs(searchQuery);
+                // 1. Lexicon Search (Local Filter) - Only on initial offset usually, or simple filter
+                if (eventConfig.allowLexicon && lexiconLibrary.length > 0 && offset === 0) {
+                    const lowerQuery = searchQuery.toLowerCase();
+                    const matches = lexiconLibrary.filter(track =>
+                        track.title.toLowerCase().includes(lowerQuery) ||
+                        track.artist.toLowerCase().includes(lowerQuery)
+                    ).slice(0, 5); // Take top 5 local matches
+
+                    lexiconMatches = matches.map(track => ({
+                        id: `lexicon_${track.id}`,
+                        title: track.title,
+                        artist: track.artist,
+                        album: 'DJ Library', // Placeholder
+                        coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=100&h=100&fit=crop', // Generic DJ Cover
+                        previewUrl: null,
+                        source: 'LEXICON' // Custom property for UI badge
+                    }));
                 }
 
-                if (results.length === 0) {
+                // 2. Spotify Search (External)
+                if (eventConfig.allowSpotify) {
+                    if (config.spotifyToken) {
+                        try {
+                            spotifyMatches = await searchSpotify(searchQuery, config.spotifyToken, offset);
+                        } catch (spotifyError) {
+                            if (offset === 0) {
+                                console.warn("Spotify failed, falling back to Gemini", spotifyError);
+                                spotifyMatches = await searchSongs(searchQuery);
+                            }
+                        }
+                    } else if (offset === 0) {
+                        // Gemini Fallback
+                        spotifyMatches = await searchSongs(searchQuery);
+                    }
+                }
+
+                // Combine: Lexicon first, then Spotify
+                // Note: If offset > 0, we typically only fetch more Spotify results since Lexicon is all-at-once local
+                if (offset === 0) {
+                    combinedResults = [...lexiconMatches, ...spotifyMatches];
+                } else {
+                    combinedResults = spotifyMatches;
+                }
+
+                if (combinedResults.length === 0) {
                     setHasMore(false);
                 } else {
                     setSearchResults(prev => {
@@ -88,7 +172,7 @@ export const EventSearchPage: React.FC = () => {
                         // But we cleared them in the other effect.
 
                         const current = offset === 0 ? [] : prev;
-                        const combined = [...current, ...results];
+                        const combined = [...current, ...combinedResults];
 
                         // De-duplicate
                         const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
@@ -122,7 +206,7 @@ export const EventSearchPage: React.FC = () => {
         return () => {
             if (timeoutId) clearTimeout(timeoutId);
         };
-    }, [searchQuery, offset, config.spotifyToken, hasMore, searchResults.length]);
+    }, [searchQuery, offset, config.spotifyToken, hasMore, searchResults.length, eventConfig]);
 
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         const { scrollTop, clientHeight, scrollHeight } = e.currentTarget;

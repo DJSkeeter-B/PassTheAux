@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { deleteUserAccount, reauthenticateUser, requestAccountDeletion, cancelAccountDeletion } from '../services/firebase';
 import { UserProfile } from '../types';

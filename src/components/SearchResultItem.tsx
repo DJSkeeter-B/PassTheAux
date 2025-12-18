@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { SearchResult } from '../types';
 import { Plus, Vote, Play, Pause, Square } from 'lucide-react';
+import { ScrollingText } from './ScrollingText';
 
 interface SearchResultItemProps {
   result: SearchResult;
@@ -64,9 +65,18 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ result, onRe
         )}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <h4 className="text-white font-medium truncate">{result.title}</h4>
-        <p className="text-slate-400 text-xs truncate">{result.artist} • {result.album}</p>
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <ScrollingText text={result.title} className="text-white font-medium text-sm" />
+        <ScrollingText text={`${result.artist} • ${result.album}`} className="text-slate-400 text-xs" />
+
+        {result.source === 'LEXICON' && (
+          <div className="flex items-center gap-1 mt-1">
+            <div className="bg-orange-600/20 text-orange-400 text-[9px] px-1.5 py-0.5 rounded font-bold uppercase inline-flex items-center gap-1 border border-orange-500/30">
+              <svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+              In Library
+            </div>
+          </div>
+        )}
       </div>
 
       <button

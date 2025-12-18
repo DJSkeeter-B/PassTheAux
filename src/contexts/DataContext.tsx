@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Event, Venue, AppConfig } from '../types';
 import { subscribeToEvents, subscribeToVenues, subscribeToGlobalConfig, isSpotifyTokenNearExpiry, triggerRefreshSpotifyToken } from '../services/firebase';
@@ -28,13 +29,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const unsubEvents = subscribeToEvents(setEvents);
-        const unsubVenues = subscribeToVenues(setVenues);
-        const unsubConfig = subscribeToGlobalConfig(setConfig);
+        let mounted = true;
 
-        setLoading(false); // Optimistic loading
+        // Safety timeout for data loading (10 seconds)
+        const timeoutId = setTimeout(() => {
+            if (mounted && loading) {
+                console.warn("Data subscription timed out - forcing loading completion");
+                setLoading(false);
+            }
+        }, 10000);
+
+        const unsubEvents = subscribeToEvents((d) => { if (mounted) setEvents(d); });
+        const unsubVenues = subscribeToVenues((d) => { if (mounted) setVenues(d); });
+        const unsubConfig = subscribeToGlobalConfig((d) => {
+            if (mounted) {
+                setConfig(d);
+                // We consider "loaded" once config arrives, or at least one piece of data
+                setLoading(false);
+            }
+        });
 
         return () => {
+            mounted = false;
+            clearTimeout(timeoutId);
             unsubEvents();
             unsubVenues();
             unsubConfig();

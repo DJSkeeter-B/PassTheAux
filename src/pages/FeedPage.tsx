@@ -1,4 +1,5 @@
-import React from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Music, Calendar, PlusCircle } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -8,23 +9,74 @@ import { Event } from '../types';
 
 export const FeedPage: React.FC = () => {
     const { user } = useAuth();
-    const { events } = useData();
+    const { events, venues } = useData();
     const navigate = useNavigate();
 
     const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 
+    // Helper: Is Valid Venue?
+    const isVenueApproved = (evt: Event) => {
+        // If specific ID linked, check it
+        if (evt.venueId) {
+            const v = venues.find(v => v.id === evt.venueId);
+            return v ? v.status === 'APPROVED' : true; // If ID exists but not found? Assume true/legacy or deleted. Strict would be false. Let's assume true to avoid breaking legacy unless explicitly pending.
+            // Wait, if it IS found and PENDING, return false.
+        }
+        // Fallback: Check by Name
+        if (evt.venueName) {
+            const v = venues.find(v => v.name.toLowerCase() === evt.venueName.toLowerCase());
+            if (v && v.status === 'PENDING') return false;
+        }
+        return true;
+    };
+
     // 1. "Happening Tonight"
-    const tonightEvents = events.filter(e =>
-        e.date === today &&
-        e.isPublic !== false &&
-        !e.isArchived
-    );
+    const now = new Date();
+    const currentHours = now.getHours();
+    const currentMinutes = now.getMinutes();
+    const currentTimeVal = currentHours * 60 + currentMinutes;
+
+    const tonightEvents = events.filter(e => {
+        // Venue Check
+        if (!isVenueApproved(e)) return false;
+
+        // Basic Checks
+        if (e.date !== today) return false;
+        if (e.isPublic === false) return false;
+        if (e.isArchived) return false;
+
+        // Time Check: Exclude if passed
+        if (e.endTime && e.startTime) {
+            const [startH, startM] = e.startTime.split(':').map(Number);
+            const [endH, endM] = e.endTime.split(':').map(Number);
+
+            const startVal = startH * 60 + startM;
+            const endVal = endH * 60 + endM;
+
+            // Handle Midnight Crossing (e.g. 10pm - 2am)
+            if (startVal > endVal) {
+                // If it ends tomorrow, and we are currently on the start date (today), 
+                // it naturally hasn't ended yet (unless it's insane length).
+                return true;
+            } else {
+                // Same day event. Check if 'now' is past 'end'.
+                if (currentTimeVal > endVal) return false;
+            }
+        } else if (e.endTime) {
+            // Fallback if no start time but has end time (rare)
+            const [endH, endM] = e.endTime.split(':').map(Number);
+            if (currentTimeVal > (endH * 60 + endM)) return false;
+        }
+
+        return true;
+    });
 
     // 2. "Upcoming" (Future dates)
     const upcomingEvents = events.filter(e =>
         e.date > today &&
         e.isPublic !== false &&
-        !e.isArchived
+        !e.isArchived &&
+        isVenueApproved(e)
     ).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
     // Group Upcoming by Date

@@ -1,8 +1,11 @@
+console.log("DEBUG: EventCard MODULE EVALUATING");
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MapPin, Headphones, User, Clock, ArrowRight, CornerDownRight, LogOut, Music } from 'lucide-react';
 import { Event } from '../types';
 import { checkInUser, checkOutUser } from '../services/firebase';
+import { ConfirmationModal } from './ConfirmationModal';
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 
@@ -14,9 +17,34 @@ interface EventCardProps {
 export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventId }) => {
     const navigate = useNavigate();
     const { user } = useAuth();
+    const { events } = useData();
 
     const isCheckedInHere = userCheckedInEventId === event.id;
     const isCheckedInElsewhere = !!userCheckedInEventId && !isCheckedInHere;
+
+    // Series Volume Logic
+    const volStr = React.useMemo(() => {
+        if (!event.seriesId || !events.length) return null;
+        const seriesEvents = events.filter(e => e.seriesId === event.seriesId);
+        if (seriesEvents.length <= 1) return null;
+        seriesEvents.sort((a, b) => a.date.localeCompare(b.date));
+        const idx = seriesEvents.findIndex(e => e.id === event.id);
+        return idx >= 0 ? `Vol. ${idx + 1}` : null;
+    }, [event.id, event.seriesId, events]);
+
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+        isDestructive?: boolean;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { },
+        isDestructive: false
+    });
 
     const handleQuickAction = async (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -26,39 +54,47 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
         }
 
         if (isCheckedInHere) {
-            if (confirm("Are you sure you want to leave the party?")) {
-                await checkOutUser(user.id);
-            }
+            setConfirmModal({
+                isOpen: true,
+                title: "Check Out?",
+                message: "Are you sure you want to leave the party?",
+                isDestructive: true,
+                onConfirm: async () => {
+                    await checkOutUser(user.id);
+                }
+            });
             return;
         }
 
-        // SMART GEOLOCATION BYPASS
-        // Logic: Bypass if user is ADMIN, Event Owner, or an Assigned DJ.
-        const isOwner = user.id === event.ownerId;
-        const isAssignedDj = event.djIds?.includes(user.id);
-        const isAdmin = user.role === 'ADMIN';
+        const performCheckIn = async () => {
+            // SMART GEOLOCATION BYPASS
+            // Logic: Bypass if user is ADMIN, Event Owner, or an Assigned DJ.
+            const isOwner = user.id === event.ownerId;
+            const isAssignedDj = event.djIds?.includes(user.id);
+            const isAdmin = user.role === 'ADMIN';
 
-        const canBypass = isAdmin || isOwner || isAssignedDj;
+            const canBypass = isAdmin || isOwner || isAssignedDj;
 
-        if (!canBypass) {
-            // Mock Geolocation Check (placeholder for real distance check logic)
-            // In a real implementation with coordinates, we'd check distance here.
-            // For now, if not bypassing, we assume the user is "at location" or we skip the check as per incomplete geo-implementation in this file.
-            // The user explicitly asked for bypass logic, implying a check exists or is simulated. 
-            // We'll proceed, but strictly respecting the bypass roles if a check WERE here.
-        }
+            if (!canBypass) {
+                // Mock Geolocation Check (placeholder for real distance check logic)
+            }
+
+            // If Test Mode is ON, we might skip a "Distance Check". 
+            await checkInUser(user.id, event.id);
+            navigate(`/event/${event.id}/queue`);
+        };
 
         if (isCheckedInElsewhere) {
-            if (!confirm("You are checked into another event. Switch to this one?")) {
-                return;
-            }
+            setConfirmModal({
+                isOpen: true,
+                title: "Switch Event?",
+                message: "You are checked into another event. Switch to this one?",
+                onConfirm: performCheckIn
+            });
+            return;
         }
 
-        // If Test Mode is ON, we might skip a "Distance Check". 
-        // Since we don't see the dist check, we just proceed directly.
-
-        await checkInUser(user.id, event.id);
-        navigate(`/event/${event.id}/queue`);
+        await performCheckIn();
     };
 
     return (
@@ -78,7 +114,10 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
 
                     <div>
                         {/* Title */}
-                        <h3 className="font-bold text-lg text-white leading-tight mb-1 line-clamp-2 pr-8">{event.title}</h3>
+                        <div className="flex items-baseline gap-2 mb-1 pr-8">
+                            <h3 className="font-bold text-lg text-white leading-tight line-clamp-2">{event.title}</h3>
+                            {volStr && <span className="text-[10px] uppercase font-bold text-purple-400 bg-purple-900/30 px-1.5 rounded">{volStr}</span>}
+                        </div>
 
                         {/* Info Grid */}
                         <div className="space-y-1">
@@ -123,6 +162,15 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
             {isCheckedInHere && (
                 <div className="absolute bottom-0 left-0 right-0 h-1 bg-green-500 box-content blur-[1px]" />
             )}
+
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                isDestructive={confirmModal.isDestructive}
+                onConfirm={confirmModal.onConfirm}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };

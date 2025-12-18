@@ -232,3 +232,32 @@ export const wipeDatabaseAdmin = onCall(async (request) => {
     throw new HttpsError('internal', error.message);
   }
 });
+
+export const updateEventAdmin = onCall(async (request) => {
+  // 1. Verify Caller is Admin
+  const callerUid = request.auth?.uid;
+  if (!callerUid) {
+    throw new HttpsError('unauthenticated', 'User must be logged in.');
+  }
+
+  const callerDoc = await db.collection('users').doc(callerUid).get();
+  const callerData = callerDoc.data();
+  if (!callerData || callerData.role !== 'ADMIN') {
+    throw new HttpsError('permission-denied', 'Only admins can force update events.');
+  }
+
+  const { eventId, data } = request.data;
+  if (!eventId || !data) {
+    throw new HttpsError('invalid-argument', 'Event ID and Data required.');
+  }
+
+  try {
+    // 2. Update Event
+    await db.collection('events').doc(eventId).update(data);
+    console.log(`Admin ${callerUid} force updated event ${eventId}`);
+    return { success: true };
+  } catch (error: any) {
+    console.error("Update Event Error:", error);
+    throw new HttpsError('internal', error.message);
+  }
+});

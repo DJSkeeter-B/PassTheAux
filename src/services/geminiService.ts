@@ -1,7 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { SearchResult } from '../types';
 
-const apiKey = process.env.API_KEY || '';
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || '';
 const genAI = new GoogleGenerativeAI(apiKey);
 
 export const searchSongs = async (query: string): Promise<SearchResult[]> => {
@@ -56,7 +56,7 @@ export const getCoordinatesFromLocation = async (locationQuery: string): Promise
 export const searchVenuesExternal = async (query: string): Promise<{ name: string, address: string, latitude: number, longitude: number }[]> => {
   if (!query || query.length < 3) return [];
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5&addressdetails=1`;
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=10&addressdetails=1&viewbox=-67.0,48.0,-59.0,43.0&bounded=1`;
     const resp = await fetch(url, { headers: { 'User-Agent': 'PassTheAux/1.0' } });
     const data = await resp.json();
 
@@ -70,3 +70,20 @@ export const searchVenuesExternal = async (query: string): Promise<{ name: strin
     return [];
   }
 }
+
+export const enrichVenueData = async (name: string, address: string): Promise<{ hours?: string, description?: string }> => {
+  try {
+    const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+    const prompt = `Provide a brief, catchy description (max 2 sentences) and typical operating hours for a venue named "${name}" located at "${address}". 
+    If you don't know the specific venue, provide a generic but plausible description for this type of venue and standard hours.
+    Return ONLY valid JSON with keys "description" and "hours". Example: {"description": "A lively spot...", "hours": "Mon-Sun: 10am-2am"}`;
+
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text().replace(/```json/g, '').replace(/```/g, '').trim();
+    return JSON.parse(text);
+  } catch (e) {
+    console.error("Enrichment failed", e);
+    return {};
+  }
+};

@@ -33,16 +33,24 @@ export interface UserProfile {
   appliedAt?: any;
   attendedEvents?: Event[];
   allowRepeatRequests?: boolean; // DJ Default Setting
+  isActive?: boolean;
+  lexiconConnectionEnabled?: boolean; // Integration Feature
 }
 
 export interface Series {
   id: string;
   ownerId: string;
   title: string;
-  description?: string;
-  djIds?: string[]; // Phase 7
+  description: string;
+  djIds: string[]; // Phase 7
   venueId?: string; // Phase 7
   posterUrl?: string; // Phase 7
+  // Recurrence Config
+  isRecurring?: boolean;
+  frequency?: 'WEEKLY' | 'MONTHLY';
+  dayOfWeek?: number; // 0=Sun, 1=Mon...
+  weekOfMonth?: number; // 1=1st, 2=2nd... (for Monthly)
+  autoCreate?: boolean; // If true, system auto-creates pending events
 }
 
 export interface Event {
@@ -51,6 +59,7 @@ export interface Event {
   seriesId?: string;
   title: string;
   venueName: string;
+  venueId?: string; // Link to Venue Doc
   djName: string; // Legacy display name
   djIds?: string[]; // Phase 7: Array of User IDs
   secondDjId?: string; // Phase 7: Helper for UI, but djIds is source of truth
@@ -72,6 +81,10 @@ export interface Event {
   customQrImageUrl?: string;
   seriesOrder?: number;
   allowRepeats?: boolean; // Phase 8: If true, previously played songs can be requested again
+  requestsPausedUntil?: number; // Timestamp for when requests automatically turn back on
+  // Search Integrations
+  allowLexiconSearch?: boolean; // Defaults to false
+  allowSpotifySearch?: boolean; // Defaults to true
 }
 
 export interface Venue {
@@ -82,6 +95,8 @@ export interface Venue {
   latitude?: number;
   longitude?: number;
   status: 'PENDING' | 'APPROVED';
+  hours?: string;
+  description?: string;
 }
 
 export interface Song {
@@ -109,6 +124,7 @@ export interface SearchResult {
   album: string;
   coverUrl: string;
   previewUrl?: string | null;
+  source?: 'LEXICON' | 'SPOTIFY' | 'GEMINI' | 'OTHER';
 }
 
 export interface AppConfig {

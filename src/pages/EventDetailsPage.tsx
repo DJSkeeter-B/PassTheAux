@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, MapPin, QrCode, BookOpen, Headphones } from 'lucide-react';
@@ -6,6 +7,7 @@ import { useData } from '../contexts/DataContext';
 import { checkInUser, checkOutUser, getSeriesById } from '../services/firebase';
 import { Series } from '../types';
 import { QRCodeModal } from '../components/QRCodeModal';
+import { ConfirmationModal } from '../components/ConfirmationModal';
 
 const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371; // Radius of the earth in km
@@ -37,50 +39,88 @@ export const EventDetailsPage: React.FC = () => {
         }
     }, [event?.seriesId]);
 
+    const [confirmModal, setConfirmModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { }
+    });
+
     const handleCheckIn = async () => {
         if (!user || !event) return;
 
-        // SMART GEOLOCATION BYPASS
-        // Logic: Bypass if user is ADMIN, Event Owner, or an Assigned DJ.
-        const isOwner = user.id === event.ownerId;
-        const isAssignedDj = event.djIds?.includes(user.id);
-        const isAdmin = user.role === 'ADMIN';
+        const performCheckIn = async () => {
+            // SMART GEOLOCATION BYPASS
+            // Logic: Bypass if user is ADMIN, Event Owner, or an Assigned DJ.
+            const isOwner = user.id === event.ownerId;
+            const isAssignedDj = event.djIds?.includes(user.id);
+            const isAdmin = user.role === 'ADMIN';
 
-        const canBypass = isAdmin || isOwner || isAssignedDj;
+            const canBypass = isAdmin || isOwner || isAssignedDj;
 
-        if (canBypass) {
-            console.log("Geolocation Bypass Enabled for Role/Ownership");
-            await checkInUser(user.id, event.id);
-            navigate(`/event/${event.id}/queue`);
-            return;
-        }
-
-        if (!event.latitude || !event.longitude) {
-            // No geofence, just check in
-            await checkInUser(user.id, event.id);
-            navigate(`/event/${event.id}/queue`); // Go straight to queue on checkin
-            return;
-        }
-
-        if ("geolocation" in navigator) {
-            navigator.geolocation.getCurrentPosition(async (position) => {
-                const userLat = position.coords.latitude;
-                const userLong = position.coords.longitude;
-                const dist = getDistanceFromLatLonInKm(userLat, userLong, event.latitude!, event.longitude!);
-
-                if (dist <= 2.0) {
+            try {
+                if (canBypass) {
+                    console.log("Geolocation Bypass Enabled for Role/Ownership");
                     await checkInUser(user.id, event.id);
-                    alert("Checked In Successfully!");
                     navigate(`/event/${event.id}/queue`);
-                } else {
-                    alert(`You are ${dist.toFixed(1)}km away. You must be within 2km of the venue to check in.`);
+                    return;
                 }
-            }, (error) => {
-                alert("Could not get your location. Please enable location permissions.");
+
+                if (!event.latitude || !event.longitude) {
+                    // No geofence, just check in
+                    await checkInUser(user.id, event.id);
+                    navigate(`/event/${event.id}/queue`); // Go straight to queue on checkin
+                    return;
+                }
+
+                if ("geolocation" in navigator) {
+                    navigator.geolocation.getCurrentPosition(async (position) => {
+                        const userLat = position.coords.latitude;
+                        const userLong = position.coords.longitude;
+                        const dist = getDistanceFromLatLonInKm(userLat, userLong, event.latitude!, event.longitude!);
+
+                        if (dist <= 2.0) {
+                            try {
+                                await checkInUser(user.id, event.id);
+                                // alert("Checked In Successfully!"); // Removed alert to be smoother
+                                navigate(`/event/${event.id}/queue`);
+                            } catch (e) {
+                                console.error("Check-in failed:", e);
+                                alert("Failed to check in. Please try again.");
+                            }
+                        } else {
+                            alert(`You are ${dist.toFixed(1)}km away. You must be within 2km of the venue to check in.`);
+                        }
+                    }, (error) => {
+                        console.error("Geolocation error:", error);
+                        alert("Could not get your location. Please enable location permissions.");
+                    });
+                } else {
+                    alert("Geolocation is not supported by this browser.");
+                }
+            } catch (error) {
+                console.error("Check-in error:", error);
+                alert("An error occurred during check-in.");
+            }
+        };
+
+        // Check if checked in elsewhere
+        if (user.checkedInEventId && user.checkedInEventId !== event.id) {
+            setConfirmModal({
+                isOpen: true,
+                title: "Switch Event?",
+                message: "You are currently checked into another event. Checking in here will leave the previous event.",
+                onConfirm: performCheckIn
             });
-        } else {
-            alert("Geolocation is not supported by this browser.");
+            return;
         }
+
+        await performCheckIn();
     };
 
     const handleCheckOut = async () => {
@@ -206,6 +246,13 @@ export const EventDetailsPage: React.FC = () => {
             {showQrModal && event && (
                 <QRCodeModal event={event} onClose={() => setShowQrModal(false)} />
             )}
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                onConfirm={confirmModal.onConfirm}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
         </div>
     );
 };

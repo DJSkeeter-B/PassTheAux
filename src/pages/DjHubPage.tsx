@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { Series, Event } from '../types';
-import { subscribeToSeries } from '../services/firebase';
+import { subscribeToSeries, subscribeToAllSeries } from '../services/firebase';
+import { groupEventsByDate } from '../utils/dateUtils';
 import { LogOut, Bell, Plus, Calendar, Edit2, Headphones } from 'lucide-react';
 import { SeriesModal } from '../components/SeriesModal';
 import { EventModal } from '../components/EventModal';
@@ -23,15 +24,16 @@ export const DjHubPage: React.FC = () => {
     const [showSettings, setShowSettings] = useState(false);
 
     useEffect(() => {
-        if (user?.role === 'DJ' && user.id) {
+        if (user?.role === 'ADMIN') {
+            const unsubscribe = subscribeToAllSeries(setSeries);
+            return () => unsubscribe();
+        } else if (user?.role === 'DJ' && user.id) {
             const unsubscribe = subscribeToSeries(user.id, setSeries);
             return () => unsubscribe();
         }
     }, [user]);
 
-    const myEvents = events.filter(e => e.ownerId === user?.id);
-    const activeEvents = myEvents.filter(e => !e.isArchived);
-    const archivedEvents = myEvents.filter(e => e.isArchived).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 3);
+    const myEvents = user?.role === 'ADMIN' ? events : events.filter(e => e.ownerId === user?.id);
 
     return (
         <div className="pb-24 px-4 pt-4 space-y-6 h-screen overflow-y-auto bg-slate-950">
@@ -98,8 +100,8 @@ export const DjHubPage: React.FC = () => {
             </section>
 
             {/* EVENTS SECTION */}
-            <section>
-                <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 py-2 border-b border-white/10 mb-4 flex justify-between items-center">
+            <section className="flex flex-col min-h-0 flex-1">
+                <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 py-2 border-b border-white/10 mb-2 flex justify-between items-center shrink-0">
                     <h3 className="font-bold text-slate-400 text-sm uppercase tracking-wider">Events</h3>
                     <button
                         onClick={() => { setEditingEvent({}); setShowEventModal(true); }}
@@ -109,55 +111,112 @@ export const DjHubPage: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="space-y-3">
-                    {activeEvents.length === 0 ? (
-                        <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 text-center">
-                            <p className="text-slate-500 text-sm">No active events.</p>
-                        </div>
-                    ) : (
-                        activeEvents.map(evt => (
-                            <div key={evt.id} className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex justify-between items-center group hover:border-purple-500/50 transition cursor-pointer" onClick={() => navigate(`/dj/event/${evt.id}`)}>
-                                <div>
-                                    <h3 className="font-bold text-white">{evt.title}</h3>
-                                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                                        <Calendar size={12} />
-                                        <span>{new Date(evt.date).toDateString()}</span>
-                                        <span>•</span>
-                                        <span className={evt.isLive ? "text-green-400 font-bold" : ""}>{evt.isLive ? 'LIVE' : evt.startTime}</span>
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <button className="px-3 py-1.5 bg-purple-600/10 text-purple-400 hover:bg-purple-600 hover:text-white rounded-lg text-xs font-bold transition">
-                                        Dashboard
-                                    </button>
-                                </div>
-                            </div>
-                        ))
-                    )}
-                </div>
+                <div className="overflow-y-auto pr-1 pb-10 space-y-6 min-h-0 flex-1">
+                    {(() => {
+                        // Combine logic: Admin sees all, DJ sees own.
+                        const myEvents = user?.role === 'ADMIN' ? events : events.filter(e => e.ownerId === user?.id);
 
-                {/* Archived Section */}
-                {archivedEvents.length > 0 && (
-                    <div className="pt-4 mt-6 border-t border-slate-800">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-3 text-right">Archived History</h4>
-                        {archivedEvents.map(evt => (
-                            <div key={evt.id} className="bg-slate-900/30 border border-slate-800/50 rounded-lg p-3 flex justify-between items-center mb-2 opacity-60 hover:opacity-100 transition">
-                                <div>
-                                    <h4 className="text-sm font-medium text-slate-400">{evt.title}</h4>
-                                    <p className="text-[10px] text-slate-600">{evt.date}</p>
+                        // Use categorization utility
+                        const groupedEvents = groupEventsByDate(myEvents);
+
+                        if (groupedEvents.length === 0) {
+                            return (
+                                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 text-center">
+                                    <p className="text-slate-500 text-sm">No events found.</p>
                                 </div>
-                                <div className="flex gap-2">
-                                    <button
-                                        onClick={(e) => { e.stopPropagation(); setEditingEvent(evt); setShowEventModal(true); }}
-                                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded transition"
-                                    >
-                                        <Edit2 size={14} />
-                                    </button>
+                            );
+                        }
+
+                        return groupedEvents.map(group => (
+                            <div key={group.category}>
+                                <h4 className="sticky top-0 bg-slate-950/90 backdrop-blur z-10 py-1 text-xs font-bold text-slate-500 uppercase mb-2 border-b border-slate-800/50">
+                                    {group.category}
+                                </h4>
+                                <div className="space-y-2">
+                                    {group.events.map(evt => {
+                                        const isPast = group.category !== 'Today' && group.category !== 'Upcoming';
+
+                                        return (
+                                            <div
+                                                key={evt.id}
+                                                onClick={() => navigate(`/dj/event/${evt.id}`)}
+                                                className={`
+                                                    rounded-xl p-3 border transition cursor-pointer flex justify-between items-center group
+                                                    ${isPast ? 'bg-slate-900/40 border-slate-800/60 hover:bg-slate-900 hover:border-slate-700' : 'bg-slate-900 border-slate-800 hover:border-purple-500/50'}
+                                                `}
+                                            >
+                                                <div>
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        <h3 className={`font-bold ${isPast ? 'text-slate-400' : 'text-white'}`}>
+                                                            {evt.title}
+                                                        </h3>
+                                                        {evt.isLive && <span className="text-[10px] bg-green-900 text-green-200 px-1 rounded font-bold">LIVE</span>}
+
+                                                        {(() => {
+                                                            const v = venues.find(v => v.id === evt.venueId || v.name === evt.venueName);
+                                                            if (v && v.status === 'PENDING') {
+                                                                return (
+                                                                    <span className="text-[10px] bg-yellow-900/40 text-yellow-500 border border-yellow-500/30 px-1.5 py-0.5 rounded uppercase font-bold flex items-center gap-1">
+                                                                        <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 animate-pulse" /> Venue Pending
+                                                                    </span>
+                                                                );
+                                                            }
+                                                            return null;
+                                                        })()}
+                                                    </div>
+
+                                                    <div className="flex items-center gap-3 text-xs text-slate-500">
+                                                        {/* For Past events, the DATE is crucial. Start with it. */}
+                                                        <div className={`flex items-center gap-1 ${isPast ? 'text-slate-300 font-medium' : ''}`}>
+                                                            <Calendar size={12} />
+                                                            <span>{new Date(evt.date).toDateString()}</span>
+                                                        </div>
+
+                                                        {!isPast && (
+                                                            <>
+                                                                <span>•</span>
+                                                                <span className={evt.isLive ? "text-green-400 font-bold" : ""}>
+                                                                    {evt.isLive ? 'LIVE' : evt.startTime}
+                                                                </span>
+                                                            </>
+                                                        )}
+
+                                                        {/* Show Venue for context */}
+                                                        {evt.venueName && (
+                                                            <>
+                                                                <span>•</span>
+                                                                <span className="truncate max-w-[150px]">{evt.venueName}</span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex items-center gap-2">
+                                                    <button className={`
+                                                        px-3 py-1.5 rounded-lg text-xs font-bold transition
+                                                        ${isPast ? 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-slate-300' : 'bg-purple-600/10 text-purple-400 hover:bg-purple-600 hover:text-white'}
+                                                    `}>
+                                                        {isPast ? 'History' : 'Dashboard'}
+                                                    </button>
+
+                                                    {isPast && (
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); setEditingEvent(evt); setShowEventModal(true); }}
+                                                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded transition opacity-0 group-hover:opacity-100"
+                                                            title="Edit Event Details"
+                                                        >
+                                                            <Edit2 size={14} />
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
-                        ))}
-                    </div>
-                )}
+                        ));
+                    })()}
+                </div>
             </section>
 
             {showEventModal && (

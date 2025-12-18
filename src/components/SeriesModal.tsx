@@ -1,8 +1,10 @@
+console.log("DEBUG: SeriesModal MODULE EVALUATING");
 import React, { useState } from 'react';
 import { useData } from '../contexts/DataContext';
-import { createSeries, uploadEventImage, searchUsers } from '../services/firebase';
-import { X, Image as ImageIcon, Edit2, Plus, Search } from 'lucide-react';
-import { UserProfile } from '../types';
+import { createSeries, uploadEventImage, searchUsers, createVenue } from '../services/firebase';
+import { searchVenuesExternal } from '../services/geminiService';
+import { X, Image as ImageIcon, Edit2, Plus, Search, MapPin } from 'lucide-react';
+import { UserProfile, Venue } from '../types';
 
 interface SeriesModalProps {
     onClose: () => void;
@@ -24,13 +26,37 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
     const [djSearchResults, setDjSearchResults] = useState<UserProfile[]>([]);
     const [isSearching, setIsSearching] = useState(false);
 
+    // VENUE STATE
     const [seriesVenueId, setSeriesVenueId] = useState('');
+    const [venueSearchTerm, setVenueSearchTerm] = useState('');
+    const [venueSearchResults, setVenueSearchResults] = useState<any[]>([]);
+    const [isSearchingVenues, setIsSearchingVenues] = useState(false);
+    const [selectedVenueData, setSelectedVenueData] = useState<{ name: string, address: string, lat?: number, lng?: number } | null>(null);
+
+    // RECURRENCE STATE
+    const [isRecurring, setIsRecurring] = useState(false);
+    const [frequency, setFrequency] = useState<'WEEKLY' | 'MONTHLY'>('WEEKLY');
+    const [dayOfWeek, setDayOfWeek] = useState(5); // Default Friday
+    const [weekOfMonth, setWeekOfMonth] = useState(1); // Default 1st
+    const [autoCreate, setAutoCreate] = useState(false);
+
+
+    // Manual Venue Request State
+    const [showManualVenueForm, setShowManualVenueForm] = useState(false);
+    const [manualVenueData, setManualVenueData] = useState({
+        name: '',
+        address: '',
+        hours: '',
+        description: ''
+    });
+
     const [isSubmitting, setIsSubmitting] = useState(false);
 
-    // Debounced Search Effect
+    // Debounced Search Effect (DJs + Venues)
     React.useEffect(() => {
-        const timer = setTimeout(async () => {
-            if (djSearchTerm.length >= 1) { // User requested "at least 3 if exist", so lenient search
+        // DJ Search
+        const djTimer = setTimeout(async () => {
+            if (djSearchTerm.length >= 1) {
                 setIsSearching(true);
                 const results = await searchUsers(djSearchTerm);
                 setDjSearchResults(results.filter(u => !seriesDjIds.includes(u.id))); // Filter selected
@@ -38,14 +64,25 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
             } else if (djSearchTerm.length === 0) {
                 setDjSearchResults([]);
             }
-        }, 300); // 300ms debounce
+        }, 300);
 
-        return () => clearTimeout(timer);
-    }, [djSearchTerm, seriesDjIds]);
+        // Venue Search
+        const venueTimer = setTimeout(async () => {
+            if (venueSearchTerm.length >= 3) {
+                setIsSearchingVenues(true);
+                const results = await searchVenuesExternal(venueSearchTerm);
+                setVenueSearchResults(results);
+                setIsSearchingVenues(false);
+            } else {
+                setVenueSearchResults([]);
+            }
+        }, 500);
+
+        return () => { clearTimeout(djTimer); clearTimeout(venueTimer); };
+    }, [djSearchTerm, seriesDjIds, venueSearchTerm]);
 
     const handleSearchDjs = (term: string) => {
         setDjSearchTerm(term);
-        // Effect handles the rest
     };
 
     const addDj = (dj: UserProfile) => {
@@ -64,11 +101,82 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
         setSelectedDjs(prev => prev.filter(d => d.id !== id));
     };
 
+    // --- VENUE HANDLERS ---
+
+    const selectVenue = (venue: any) => {
+        // Check if this venue already exists in our DB by name
+        const existing = venues.find(v => v.name.toLowerCase() === venue.name.toLowerCase());
+        if (existing) {
+            setSeriesVenueId(existing.id);
+            setSelectedVenueData({ name: existing.name, address: existing.address || '' });
+        } else {
+            setSeriesVenueId(''); // Will need creation
+            setSelectedVenueData({
+                name: venue.name,
+                address: venue.address,
+                lat: venue.latitude,
+                lng: venue.longitude
+            });
+        }
+        setVenueSearchTerm('');
+        setVenueSearchResults([]);
+    };
+
+    const clearVenue = () => {
+        setSeriesVenueId('');
+        setSelectedVenueData(null);
+        setVenueSearchTerm('');
+    };
+
+    const handleManualVenueSubmit = async () => {
+        if (!manualVenueData.name || !manualVenueData.address) {
+            alert("Venue Name and Address are required.");
+            return;
+        }
+
+        try {
+            // Create Pending Venue immediately
+            const newId = await createVenue({
+                name: manualVenueData.name,
+                address: manualVenueData.address,
+                hours: manualVenueData.hours,
+                description: manualVenueData.description,
+                status: 'PENDING',
+            } as any);
+
+            // Select it
+            setSeriesVenueId(newId); // createVenue returns ID
+            setSelectedVenueData({ name: manualVenueData.name, address: manualVenueData.address });
+
+            // Reset UI
+            setShowManualVenueForm(false);
+            setManualVenueData({ name: '', address: '', hours: '', description: '' });
+            setVenueSearchTerm('');
+        } catch (e) {
+            console.error("Failed to create venue request", e);
+            alert("Failed to submit venue request.");
+        }
+    };
+
     const handleCreateSeries = async () => {
         if (!seriesTitle) return;
         setIsSubmitting(true);
 
         try {
+            let finalVenueId = seriesVenueId;
+
+            // If we have selected venue data but no ID (from external search), create it now
+            if (!finalVenueId && selectedVenueData) {
+                // Double check it wasn't made in the meantime? Unlikely.
+                finalVenueId = await createVenue({
+                    name: selectedVenueData.name,
+                    address: selectedVenueData.address,
+                    latitude: selectedVenueData.lat,
+                    longitude: selectedVenueData.lng,
+                    status: 'PENDING'
+                } as any);
+            }
+
             let posterUrl = undefined;
             if (seriesPosterFile) {
                 try {
@@ -84,13 +192,17 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
                 title: seriesTitle,
                 description: seriesDescription,
                 djIds: seriesDjIds,
-                venueId: seriesVenueId,
-                posterUrl
+                venueId: finalVenueId,
+                posterUrl,
+                isRecurring,
+                frequency: isRecurring ? frequency : undefined,
+                dayOfWeek: isRecurring ? dayOfWeek : undefined,
+                weekOfMonth: isRecurring && frequency === 'MONTHLY' ? weekOfMonth : undefined,
+                autoCreate: isRecurring ? autoCreate : undefined
             });
 
             if (onSeriesCreated) onSeriesCreated(newSeriesId);
             onClose();
-            // alert("Series Created!"); // Removed annoying alert, UI update should suffice
         } catch (error) {
             console.error(error);
             alert("Failed to create series.");
@@ -184,18 +296,186 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
                             />
                         </div>
 
+
+                        {/* RECURRENCE SETTINGS */}
+                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 mb-4">
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-xs text-slate-400 font-bold uppercase">Repeating Event Series?</label>
+                                <div
+                                    onClick={() => setIsRecurring(!isRecurring)}
+                                    className={`w-10 h-5 rounded-full relative cursor-pointer transition ${isRecurring ? 'bg-purple-600' : 'bg-slate-700'}`}
+                                >
+                                    <div className={`absolute top-1 w-3 h-3 bg-white rounded-full transition-all ${isRecurring ? 'left-6' : 'left-1'}`} />
+                                </div>
+                            </div>
+
+                            {isRecurring && (
+                                <div className="space-y-3 mt-3 pt-3 border-t border-slate-800">
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            onClick={() => setFrequency('WEEKLY')}
+                                            className={`py-2 px-3 text-xs font-bold rounded border ${frequency === 'WEEKLY' ? 'bg-purple-900/30 border-purple-500 text-purple-300' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-white'}`}
+                                        >
+                                            Weekly
+                                        </button>
+                                        <button
+                                            onClick={() => setFrequency('MONTHLY')}
+                                            className={`py-2 px-3 text-xs font-bold rounded border ${frequency === 'MONTHLY' ? 'bg-purple-900/30 border-purple-500 text-purple-300' : 'bg-slate-900 border-slate-700 text-slate-500 hover:text-white'}`}
+                                        >
+                                            Monthly
+                                        </button>
+                                    </div>
+
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-slate-400">On</span>
+                                        {frequency === 'MONTHLY' && (
+                                            <select
+                                                value={weekOfMonth}
+                                                onChange={e => setWeekOfMonth(Number(e.target.value))}
+                                                className="bg-slate-900 text-white text-xs p-1 rounded border border-slate-700"
+                                            >
+                                                <option value={1}>1st</option>
+                                                <option value={2}>2nd</option>
+                                                <option value={3}>3rd</option>
+                                                <option value={4}>4th</option>
+                                            </select>
+                                        )}
+                                        <select
+                                            value={dayOfWeek}
+                                            onChange={e => setDayOfWeek(Number(e.target.value))}
+                                            className="flex-1 bg-slate-900 text-white text-xs p-1 rounded border border-slate-700 outline-none"
+                                        >
+                                            <option value={0}>Sunday</option>
+                                            <option value={1}>Monday</option>
+                                            <option value={2}>Tuesday</option>
+                                            <option value={3}>Wednesday</option>
+                                            <option value={4}>Thursday</option>
+                                            <option value={5}>Friday</option>
+                                            <option value={6}>Saturday</option>
+                                        </select>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 pt-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={autoCreate}
+                                            onChange={e => setAutoCreate(e.target.checked)}
+                                            className="w-4 h-4 rounded border-slate-700 bg-slate-900 accent-purple-600"
+                                        />
+                                        <div>
+                                            <div className="text-xs font-bold text-white">Auto-Create Pending Events</div>
+                                            <div className="text-[10px] text-slate-500">System will look ahead and create drafts.</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* SERIES VENUE SELECTOR */}
                         <div>
                             <label className="text-xs text-slate-400 block mb-1">Default Venue</label>
-                            <select
-                                className="w-full bg-slate-950 p-3 rounded-lg border border-slate-700 text-white text-sm outline-none"
-                                value={seriesVenueId}
-                                onChange={e => setSeriesVenueId(e.target.value)}
-                            >
-                                <option value="">Select Venue...</option>
-                                {venues.map(v => (
-                                    <option key={v.id} value={v.id}>{v.name}</option>
-                                ))}
-                            </select>
+
+                            {selectedVenueData ? (
+                                <div className="bg-slate-950 p-3 rounded border border-green-900/50 flex items-center justify-between">
+                                    <div>
+                                        <div className="flex items-center gap-2 text-white font-bold text-sm">
+                                            <MapPin size={14} className="text-green-500" />
+                                            {selectedVenueData.name}
+                                        </div>
+                                        <div className="text-xs text-slate-500 ml-5 truncate max-w-[250px]">{selectedVenueData.address}</div>
+                                    </div>
+                                    <button onClick={clearVenue} className="text-slate-500 hover:text-white p-1 bg-slate-800 rounded">
+                                        <X size={14} />
+                                    </button>
+                                </div>
+                            ) : showManualVenueForm ? (
+                                <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 space-y-3">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <h4 className="text-xs font-bold text-white uppercase">New Venue Request</h4>
+                                        <button onClick={() => setShowManualVenueForm(false)} className="text-slate-500 hover:text-white"><X size={14} /></button>
+                                    </div>
+
+                                    <input
+                                        className="w-full bg-slate-900 p-2 rounded border border-slate-600 text-xs text-white"
+                                        placeholder="Venue Name *"
+                                        value={manualVenueData.name}
+                                        onChange={e => setManualVenueData({ ...manualVenueData, name: e.target.value })}
+                                    />
+                                    <input
+                                        className="w-full bg-slate-900 p-2 rounded border border-slate-600 text-xs text-white"
+                                        placeholder="Address / Location *"
+                                        value={manualVenueData.address}
+                                        onChange={e => setManualVenueData({ ...manualVenueData, address: e.target.value })}
+                                    />
+                                    <input
+                                        className="w-full bg-slate-900 p-2 rounded border border-slate-600 text-xs text-white"
+                                        placeholder="Hours of Operation (Optional)"
+                                        value={manualVenueData.hours}
+                                        onChange={e => setManualVenueData({ ...manualVenueData, hours: e.target.value })}
+                                    />
+                                    <textarea
+                                        className="w-full bg-slate-900 p-2 rounded border border-slate-600 text-xs text-white"
+                                        placeholder="Other Notes / Description (Optional)"
+                                        rows={2}
+                                        value={manualVenueData.description}
+                                        onChange={e => setManualVenueData({ ...manualVenueData, description: e.target.value })}
+                                    />
+                                    <button
+                                        onClick={handleManualVenueSubmit}
+                                        className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold rounded transition"
+                                    >
+                                        Submit Request & Select
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="relative">
+                                    <div className="flex gap-2">
+                                        <input
+                                            className="flex-1 bg-slate-950 p-3 rounded border border-slate-700 text-white"
+                                            placeholder="Search for a venue..."
+                                            value={venueSearchTerm}
+                                            onChange={e => setVenueSearchTerm(e.target.value)}
+                                        />
+                                        {isSearchingVenues && <div className="p-3"><div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div></div>}
+                                    </div>
+
+                                    <div className="mt-1 flex justify-end">
+                                        <button
+                                            onClick={() => setShowManualVenueForm(true)}
+                                            className="text-[10px] text-purple-400 hover:text-purple-300 font-bold underline"
+                                        >
+                                            Request a New Venue
+                                        </button>
+                                    </div>
+
+                                    {venueSearchResults.length > 0 && (
+                                        <div className="absolute top-full left-0 w-full bg-slate-800 border border-slate-700 rounded-xl mt-1 z-50 max-h-60 overflow-y-auto shadow-2xl">
+                                            {venueSearchResults.map((result, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className="p-3 hover:bg-slate-700 cursor-pointer border-b border-slate-700/50 last:border-0"
+                                                    onClick={() => selectVenue(result)}
+                                                >
+                                                    <div className="font-bold text-sm text-white">{result.name}</div>
+                                                    <div className="text-xs text-slate-400">{result.address}</div>
+                                                </div>
+                                            ))}
+                                            <div className="p-2 text-center text-[10px] text-slate-500 bg-slate-900 cursor-pointer" onClick={() => setVenueSearchResults([])}>Close Results</div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {selectedVenueData && (
+                                <div className="mt-1 text-[10px] text-slate-500 italic">
+                                    {seriesVenueId ?
+                                        (venues.find(v => v.id === seriesVenueId)?.status === 'APPROVED' ?
+                                            <span className="text-green-500">✓ Verified Venue</span> :
+                                            <span className="text-yellow-500">⚠ Pending Approval</span>)
+                                        : <span className="text-yellow-500">⚠ Will be requested on save</span>
+                                    }
+                                </div>
+                            )}
                         </div>
 
                         <div>

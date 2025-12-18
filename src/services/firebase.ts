@@ -1,3 +1,4 @@
+
 import {
   collection, doc, addDoc, updateDoc, onSnapshot,
   query, where, limit, getDocs, deleteDoc, setDoc, getDoc, documentId, runTransaction, serverTimestamp,
@@ -51,6 +52,8 @@ export const updateUserProfile = async (userId: string, data: Partial<UserProfil
   if (data.name !== undefined) updates.name = data.name;
   if (data.username !== undefined) updates.username = data.username;
   if (data.avatarUrl !== undefined) updates.avatarUrl = data.avatarUrl;
+  if (data.lexiconConnectionEnabled !== undefined) updates.lexiconConnectionEnabled = data.lexiconConnectionEnabled;
+  if (data.allowRepeatRequests !== undefined) updates.allowRepeatRequests = data.allowRepeatRequests;
 
   if (Object.keys(updates).length > 0) {
     await updateDoc(userRef, updates);
@@ -77,6 +80,10 @@ export const subscribeToUserProfile = (uid: string, callback: (profile: UserProf
       // ENFORCE ADMIN ROLE IF EMAIL MATCHES (Frontend Side)
       if (auth.currentUser?.email && ADMIN_EMAILS.includes(auth.currentUser.email)) {
         role = 'ADMIN';
+        // Auto-fix DB if needed (Ensure DB reflects Admin status so security rules pass)
+        if (data.role !== 'ADMIN') {
+          updateDoc(doc(db, "users", uid), { role: 'ADMIN' }).catch(console.error);
+        }
       }
 
       const profile: UserProfile = {
@@ -93,7 +100,9 @@ export const subscribeToUserProfile = (uid: string, callback: (profile: UserProf
         isAnonymous: auth.currentUser?.isAnonymous,
         checkedInEventId: data.checkedInEventId,
         deletionRequested: data.deletionRequested || false,
-        deletionRequestedAt: data.deletionRequestedAt || null
+        deletionRequestedAt: data.deletionRequestedAt || null,
+        lexiconConnectionEnabled: data.lexiconConnectionEnabled,
+        allowRepeatRequests: data.allowRepeatRequests
       };
       callback(profile);
     } else {
@@ -444,7 +453,7 @@ export const subscribeToDjRequests = (callback: (users: UserProfile[]) => void) 
 };
 
 export const subscribeToAllDjs = (callback: (users: UserProfile[]) => void) => {
-  const q = query(collection(db, "users"), where("role", "==", "DJ"));
+  const q = query(collection(db, "users"), where("role", "in", ["DJ", "ADMIN"]));
   return onSnapshot(q, (snapshot) => {
     const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as UserProfile));
     callback(users);
@@ -457,7 +466,15 @@ export const processDjApplication = async (userId: string, isApproved: boolean) 
   const userRef = doc(db, "users", userId);
   await updateDoc(userRef, {
     djStatus: isApproved ? 'APPROVED' : 'DENIED',
-    role: isApproved ? 'DJ' : 'LISTENER'
+    role: isApproved ? 'DJ' : 'LISTENER',
+    isActive: isApproved // Auto-activate on approval
+  });
+};
+
+export const toggleDjActiveStatus = async (userId: string, currentStatus: boolean) => {
+  const userRef = doc(db, "users", userId);
+  await updateDoc(userRef, {
+    isActive: !currentStatus
   });
 };
 
@@ -514,6 +531,11 @@ export const searchUsers = async (searchTerm: string): Promise<UserProfile[]> =>
   }
 }
 
+export const searchDjs = async (searchTerm: string): Promise<UserProfile[]> => {
+  const users = await searchUsers(searchTerm);
+  return users.filter(u => u.role === 'DJ' || u.role === 'ADMIN');
+};
+
 export const resetDjRoles = async () => {
   const ALLOWED_DJS = ['TestAdmin', 'Auxmaster', 'PartyHost'];
   const ADMIN_EMAILS = ['brandon.skeeterb@gmail.com', 'djskeeterb@gmail.com'];
@@ -559,6 +581,16 @@ export const subscribeToSeries = (ownerId: string, callback: (series: Series[]) 
   });
 };
 
+export const subscribeToAllSeries = (callback: (series: Series[]) => void) => {
+  const q = query(collection(db, "series"));
+  return onSnapshot(q, (snapshot) => {
+    const series = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Series));
+    callback(series);
+  }, (error) => {
+    console.warn("All Series subscription error:", error);
+  });
+};
+
 export const createSeries = async (seriesData: Omit<Series, 'id'>): Promise<string> => {
   const docRef = await addDoc(collection(db, "series"), sanitizeData(seriesData));
   return docRef.id;
@@ -571,6 +603,20 @@ export const getSeriesById = async (seriesId: string): Promise<Series | null> =>
     return null;
   } catch (e) {
     return null;
+  }
+};
+
+export const getSeriesByVenueId = async (venueId: string): Promise<Series[]> => {
+  try {
+    const q = query(
+      collection(db, "series"),
+      where("venueId", "==", venueId)
+    );
+    const snap = await getDocs(q);
+    return snap.docs.map(d => ({ ...d.data(), id: d.id } as Series));
+  } catch (e) {
+    console.warn("Error fetching series by venue:", e);
+    return [];
   }
 };
 
@@ -616,14 +662,50 @@ export const updateEvent = async (eventId: string, data: Partial<Event>) => {
   await updateDoc(doc(db, "events", eventId), sanitizeData(data));
 };
 
+export const getEventsByVenueName = async (venueName: string): Promise<Event[]> => {
+  try {
+    const q = query(
+      collection(db, "events"),
+      where("venue.name", "==", venueName)
+    );
+    const snap = await getDocs(q);
+    const events = snap.docs.map(d => ({ ...d.data(), id: d.id } as Event));
+    return events;
+  } catch (e) {
+    console.error("Error fetching events by venue name:", e);
+    return [];
+  }
+};
+
+export const updateEventAsAdmin = async (eventId: string, data: Partial<Event>) => {
+  const functions = getFunctions();
+  const updateFn = httpsCallable(functions, 'updateEventAdmin');
+  await updateFn({ eventId, data });
+};
+
 export const deleteEvent = async (eventId: string) => {
   await deleteDoc(doc(db, "events", eventId));
 };
 
-export const toggleEventRequests = async (eventId: string, currentStatus: boolean) => {
-  await updateDoc(doc(db, "events", eventId), {
-    acceptingRequests: !currentStatus
-  });
+export const toggleEventRequests = async (eventId: string, currentStatus: boolean, pausedUntil: number | null = null) => {
+  // Logic:
+  // If pausing with time (pausedUntil != null): acceptingRequests = false, requestsPausedUntil = time
+  // If toggling normally:
+  //   - If Valid (Accepting=true): Turn OFF (Accepting=false, PausedUntil=null)
+  //   - If Invalid (Accepting=false): Turn ON (Accepting=true, PausedUntil=null)
+
+  if (pausedUntil) {
+    await updateDoc(doc(db, "events", eventId), {
+      acceptingRequests: false,
+      requestsPausedUntil: pausedUntil
+    });
+  } else {
+    // Standard Toggle (Manual ON/OFF)
+    await updateDoc(doc(db, "events", eventId), {
+      acceptingRequests: !currentStatus,
+      requestsPausedUntil: null
+    });
+  }
 };
 
 // --- VENUES ---
@@ -649,11 +731,18 @@ export const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promi
         canvas.width = width;
         canvas.height = height;
         const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
+        if (!ctx) {
+          reject(new Error('Could not get canvas context'));
+          return;
+        }
+        ctx.drawImage(img, 0, 0, width, height);
 
+        // Force JPEG for consistency and size
         canvas.toBlob((blob) => {
           if (blob) {
-            const newFile = new File([blob], file.name, {
+            // Correct extension to .jpg
+            const newName = file.name.replace(/\.[^/.]+$/, "") + ".jpg";
+            const newFile = new File([blob], newName, {
               type: 'image/jpeg',
               lastModified: Date.now(),
             });
@@ -673,26 +762,46 @@ export const compressImage = (file: File, maxWidth = 1200, quality = 0.8): Promi
 export const uploadEventImage = async (file: File) => {
   let fileToUpload = file;
   try {
-    const compressed = await compressImage(file);
-    fileToUpload = compressed;
+    // Only compress if image
+    if (file.type.startsWith('image/')) {
+      const compressed = await compressImage(file);
+      fileToUpload = compressed;
+    }
   } catch (e) {
     console.warn("Image compression failed, uploading original.", e);
   }
 
-  const storageRef = ref(storage, `covers/${Date.now()}_${fileToUpload.name}`);
-  const snapshot = await uploadBytes(storageRef, fileToUpload);
-  return getDownloadURL(snapshot.ref);
+  try {
+    const sanitizedName = fileToUpload.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const storageRef = ref(storage, `covers/${Date.now()}_${sanitizedName}`);
+    const snapshot = await uploadBytes(storageRef, fileToUpload);
+    return getDownloadURL(snapshot.ref);
+  } catch (error: any) {
+    console.error("Firebase Storage Upload Error:", error);
+    // Re-throw to let UI know
+    throw new Error(error.message || "Upload failed");
+  }
 };
 
 export const resetEventsAndRequests = async () => {
-  const functions = getFunctions();
-  const wipeFn = httpsCallable(functions, 'wipeDatabaseAdmin');
-  const result = await wipeFn();
-  return result.data;
+  // CLIENT-SIDE WIPE (Bypassing Cloud Function to ensure Series are wiped immediately without redeploy)
+  const collections = ['events', 'songs', 'series'];
+  let totalDeleted = 0;
+
+  for (const colName of collections) {
+    const q = query(collection(db, colName));
+    const snap = await getDocs(q);
+    const deletePromises = snap.docs.map(d => deleteDoc(d.ref));
+    await Promise.all(deletePromises);
+    console.log(`Deleted ${snap.size} documents from ${colName}`);
+    totalDeleted += snap.size;
+  }
+
+  return { success: true, count: totalDeleted };
 };
 
 export const subscribeToVenues = (callback: (venues: Venue[]) => void) => {
-  const q = query(collection(db, "venues"), limit(50));
+  const q = query(collection(db, "venues"), limit(500));
   return onSnapshot(q, (snapshot) => {
     const venues = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Venue));
     callback(venues);
@@ -701,12 +810,22 @@ export const subscribeToVenues = (callback: (venues: Venue[]) => void) => {
   });
 };
 
-export const createVenue = async (venueData: Omit<Venue, 'id'>) => {
-  await addDoc(collection(db, "venues"), sanitizeData(venueData));
+export const createVenue = async (venueData: Omit<Venue, 'id'>): Promise<string> => {
+  const docRef = await addDoc(collection(db, "venues"), sanitizeData(venueData));
+  return docRef.id;
 };
 
 export const approveVenue = async (venueId: string) => {
   await updateDoc(doc(db, "venues", venueId), { status: 'APPROVED' });
+};
+
+export const updateVenue = async (venueId: string, data: Partial<Venue>) => {
+  const ref = doc(db, "venues", venueId);
+  await updateDoc(ref, data);
+};
+
+export const deleteVenue = async (venueId: string) => {
+  await deleteDoc(doc(db, "venues", venueId));
 };
 
 // --- SYSTEM SETTINGS (Global Config) ---
@@ -739,7 +858,7 @@ export const isSpotifyTokenNearExpiry = (config: AppConfig, marginMs = 5 * 60 * 
 export const triggerRefreshSpotifyToken = async (): Promise<{ ok: boolean; message?: string }> => {
   // Use the deployed Cloud Function URL by default; you can override with env var
   const defaultUrl = 'https://refreshspotifytokenhttp-3pkk43mtxq-uc.a.run.app';
-  const url = (process.env.REACT_APP_SPOTIFY_REFRESH_URL as string) || defaultUrl;
+  const url = (import.meta.env.VITE_SPOTIFY_REFRESH_URL as string) || defaultUrl;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json'

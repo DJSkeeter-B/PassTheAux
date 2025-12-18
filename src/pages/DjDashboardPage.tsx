@@ -1,6 +1,7 @@
+
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Users, QrCode, Settings } from 'lucide-react';
+import { ArrowLeft, Users, QrCode, Settings, Layers } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { subscribeToQueue, subscribeToCheckedInUsers, updateSongStatus, toggleEventRequests } from '../services/firebase';
@@ -20,6 +21,17 @@ export const DjDashboardPage: React.FC = () => {
     const [showEventModal, setShowEventModal] = useState(false);
     // Duplicate state for editing to satisfy EventModal interface
     const [editingEvent, setEditingEvent] = useState<any>({});
+
+    // Electron Floating State
+    const [isFloating, setIsFloating] = useState(false);
+    const isElectron = !!window.electronAPI;
+
+    const toggleFloatingMode = async () => {
+        if (!window.electronAPI) return;
+        const newState = !isFloating;
+        setIsFloating(newState);
+        await window.electronAPI.toggleFloating(newState);
+    };
 
     const event = events.find(e => e.id === id);
 
@@ -57,8 +69,8 @@ export const DjDashboardPage: React.FC = () => {
     if (!event) return <div className="p-10 text-white">Event not found or loading...</div>;
 
     return (
-        <div className="h-screen flex flex-col bg-slate-950 pb-20">
-            <div className="bg-slate-900 p-4 border-b border-slate-800 flex justify-between items-center sticky top-0 z-20">
+        <div className={`h-screen flex flex-col pb-20 transition-colors duration-300 ${isFloating ? 'bg-slate-950/80' : 'bg-slate-950'}`}>
+            <div className={`p-4 border-b border-slate-800 flex justify-between items-center sticky top-0 z-20 transition-colors duration-300 ${isFloating ? 'bg-slate-900/80' : 'bg-slate-900'}`}>
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => navigate('/dj')}
@@ -101,6 +113,15 @@ export const DjDashboardPage: React.FC = () => {
                     >
                         <Settings size={18} />
                     </button>
+                    {isElectron && (
+                        <button
+                            onClick={toggleFloatingMode}
+                            className={`p-2 hover:bg-slate-700 rounded transition-colors ${isFloating ? 'bg-blue-500/10 text-blue-400' : 'bg-slate-800 text-slate-400'}`}
+                            title="Toggle Floating Mode"
+                        >
+                            <Layers size={18} />
+                        </button>
+                    )}
                 </div>
             </div>
 

@@ -51,7 +51,7 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClos
             setLoading(true);
             await updateUserProfile(user.id, {
                 name: name.trim(),
-                username: username.trim(), // Already lowercase from regex check implicit requirement, but good to ensure
+                // username: username.trim(), // Remove username update
                 avatarUrl,
                 allowRepeatRequests
             });
@@ -126,19 +126,17 @@ export const EditProfileModal: React.FC<EditProfileModalProps> = ({ user, onClos
 
                         <div>
                             <label className="text-xs text-slate-400 block mb-1 font-bold uppercase">Username</label>
-                            <div className="relative">
+                            <div className="relative opacity-50">
                                 <span className="absolute left-3 top-3 text-slate-500">@</span>
                                 <input
                                     value={username}
-                                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''))}
-                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 pl-7 text-white focus:border-purple-500 outline-none transition"
+                                    readOnly
+                                    className="w-full bg-slate-950 border border-slate-800 rounded-lg p-3 pl-7 text-slate-400 cursor-not-allowed outline-none"
                                     placeholder="username"
                                 />
                             </div>
                             <p className="text-[10px] text-slate-500 mt-1">
-                                {user.role === 'DJ'
-                                    ? "This username is how hosts will search for and tag you in events."
-                                    : "Usernames must be lowercase letters and numbers only."}
+                                Usernames cannot be changed. Contact Admin for changes.
                             </p>
                         </div>
 

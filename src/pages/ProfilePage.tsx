@@ -4,6 +4,7 @@ import { Shield, Music, LogOut, Settings, Trash2, ChevronRight, Edit } from 'luc
 import { useAuth } from '../contexts/AuthContext';
 import { SettingsModal } from '../components/SettingsModal';
 import { EditProfileModal } from '../components/EditProfileModal';
+import { updateUserProfile } from '../services/firebase';
 
 export const ProfilePage: React.FC = () => {
     const { user, logout } = useAuth();
@@ -83,6 +84,37 @@ export const ProfilePage: React.FC = () => {
                         </div>
                         <ChevronRight size={18} className="text-slate-600 group-hover:text-slate-400" />
                     </button>
+                )}
+
+                {/* Lexicon Integration Toggle (Only for Admins/DJs) */}
+                {(user.role === 'ADMIN' || user.role === 'DJ') && (
+                    <div className="w-full bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="p-2 bg-emerald-900/20 text-emerald-400 rounded-lg transition">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="lucide lucide-database-zap"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5V19A9 3 0 0 0 15 21.84" /><path d="M21 5V8" /><path d="M21 12L13 22L15 15L7 16L11 9L21 9" /></svg>
+                            </div>
+                            <div className='flex flex-col'>
+                                <span className="font-semibold text-slate-200">Lexicon Connection</span>
+                                <span className="text-xs text-slate-500">Enable Local API Integration</span>
+                            </div>
+                        </div>
+                        <label className="relative inline-flex items-center cursor-pointer">
+                            <input
+                                type="checkbox"
+                                className="sr-only peer"
+                                checked={user.lexiconConnectionEnabled || false}
+                                onChange={async (e) => {
+                                    try {
+                                        await updateUserProfile(user.id, { lexiconConnectionEnabled: e.target.checked });
+                                    } catch (err) {
+                                        console.error("Failed to update profile setting:", err);
+                                        alert("Failed to update setting. Check console.");
+                                    }
+                                }}
+                            />
+                            <div className="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                        </label>
+                    </div>
                 )}
 
                 {/* Settings Trigger */}
