@@ -133,15 +133,22 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
 
         setEditingEvent(prev => ({
             ...prev,
-            djIds: [...(prev.djIds || []), dj.id],
-            // Use Display Name if available, otherwise username
-            djName: (prev.djIds || []).length === 0 ? (dj.name || dj.username) : prev.djName
+            djIds: [...(prev.djIds || []), dj.id]
         }));
         setSelectedDjObjects(prev => [...prev, dj]);
         setDjSearchTerm('');
         setDjSearchResults([]);
         markDirty('djIds');
     };
+
+    // Auto-sync djName whenever selectedDjObjects changes
+    useEffect(() => {
+        if (selectedDjObjects.length > 0) {
+            const names = selectedDjObjects.map(d => d.name || d.username).join(" & ");
+            setEditingEvent(prev => ({ ...prev, djName: names }));
+            if (names !== editingEvent.djName) markDirty('djName');
+        }
+    }, [selectedDjObjects]);
 
     const removeDj = (id: string) => {
         setEditingEvent(prev => ({

@@ -1,7 +1,7 @@
 console.log("DEBUG: SeriesModal MODULE EVALUATING");
 import React, { useState } from 'react';
 import { useData } from '../contexts/DataContext';
-import { createSeries, uploadEventImage, searchUsers, createVenue } from '../services/firebase';
+import { createSeries, uploadEventImage, searchUsers, searchDjs, createVenue } from '../services/firebase';
 import { searchVenuesExternal } from '../services/geminiService';
 import { X, Image as ImageIcon, Edit2, Plus, Search, MapPin } from 'lucide-react';
 import { UserProfile, Venue } from '../types';
@@ -58,8 +58,12 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
         const djTimer = setTimeout(async () => {
             if (djSearchTerm.length >= 1) {
                 setIsSearching(true);
-                const results = await searchUsers(djSearchTerm);
-                setDjSearchResults(results.filter(u => !seriesDjIds.includes(u.id))); // Filter selected
+                // Use searchDjs and filter out listeners
+                // Import searchDjs first (will do in separate edit if needed, assuming usage of searchUsers currently)
+                // Actually need to update import. Assuming searchUsers for now if searchDjs not imported.
+                // Wait, I should use searchDjs.
+                const results = await searchDjs(djSearchTerm);
+                setDjSearchResults(results.filter(u => !seriesDjIds.includes(u.id)));
                 setIsSearching(false);
             } else if (djSearchTerm.length === 0) {
                 setDjSearchResults([]);
@@ -192,6 +196,7 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
                 title: seriesTitle,
                 description: seriesDescription,
                 djIds: seriesDjIds,
+                djName: selectedDjs.map(d => d.name || d.username).join(" & "),
                 venueId: finalVenueId,
                 posterUrl,
                 isRecurring,
@@ -486,7 +491,7 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
                                 <div className="flex flex-wrap gap-2 mb-2">
                                     {selectedDjs.map(dj => (
                                         <div key={dj.id} className="bg-purple-900/50 border border-purple-500/30 text-purple-200 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-2">
-                                            <span>{dj.username}</span>
+                                            <span>{dj.name || dj.username}</span>
                                             <button onClick={() => removeDj(dj.id)} className="hover:text-white"><X size={12} /></button>
                                         </div>
                                     ))}
@@ -498,7 +503,7 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
                                         <Search size={14} className="text-slate-500" />
                                         <input
                                             className="bg-transparent border-none outline-none text-sm text-white flex-1 placeholder:text-slate-600"
-                                            placeholder="Search DJs by username..."
+                                            placeholder="Search DJs by name or username..."
                                             value={djSearchTerm}
                                             onChange={e => handleSearchDjs(e.target.value)}
                                             disabled={seriesDjIds.length >= 2}
@@ -512,11 +517,13 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
                                             {djSearchResults.map(u => (
                                                 <div
                                                     key={u.id}
-                                                    className="p-2 hover:bg-slate-700 cursor-pointer flex items-center gap-2"
+                                                    className="p-2 hover:bg-slate-700 cursor-pointer flex items-center justify-between group"
                                                     onClick={() => addDj(u)}
                                                 >
-                                                    <img src={u.avatarUrl} className="w-6 h-6 rounded-full" />
-                                                    <div className="text-xs text-white font-bold">{u.username}</div>
+                                                    <div>
+                                                        <div className="text-xs font-bold text-white">{u.name}</div>
+                                                        <div className="text-[10px] text-slate-400">@{u.username}</div>
+                                                    </div>
                                                     {u.role === 'DJ' && <span className="text-[10px] bg-slate-600 px-1 rounded text-slate-300">DJ</span>}
                                                 </div>
                                             ))}

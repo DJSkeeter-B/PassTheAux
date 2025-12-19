@@ -43,6 +43,7 @@ export interface Series {
   title: string;
   description: string;
   djIds: string[]; // Phase 7
+  djName?: string; // Cache for display
   venueId?: string; // Phase 7
   posterUrl?: string; // Phase 7
   // Recurrence Config
