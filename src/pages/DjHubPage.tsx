@@ -5,7 +5,7 @@ import { useData } from '../contexts/DataContext';
 import { Series, Event } from '../types';
 import { subscribeToSeries, subscribeToAllSeries } from '../services/firebase';
 import { groupEventsByDate } from '../utils/dateUtils';
-import { LogOut, Bell, Plus, Calendar, Edit2, Headphones } from 'lucide-react';
+import { LogOut, Bell, Plus, Calendar, Edit2, Headphones, Layers } from 'lucide-react';
 import { SeriesModal } from '../components/SeriesModal';
 import { EventModal } from '../components/EventModal';
 import { SettingsModal } from '../components/SettingsModal';
@@ -16,6 +16,17 @@ export const DjHubPage: React.FC = () => {
     const { events, venues } = useData();
     const navigate = useNavigate();
     const [series, setSeries] = useState<Series[]>([]);
+
+    // Electron Floating State
+    const [isFloating, setIsFloating] = useState(false);
+    const isElectron = !!window.electronAPI;
+
+    const toggleFloatingMode = async () => {
+        if (!window.electronAPI) return;
+        const newState = !isFloating;
+        setIsFloating(newState);
+        await window.electronAPI.toggleFloating(newState);
+    };
 
     // Modals
     const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -36,27 +47,38 @@ export const DjHubPage: React.FC = () => {
     const myEvents = user?.role === 'ADMIN' ? events : events.filter(e => e.ownerId === user?.id);
 
     return (
-        <div className="pb-24 px-4 pt-4 space-y-6 h-screen overflow-y-auto bg-slate-950">
+        <div className={`pb-24 px-4 pt-4 space-y-6 h-screen overflow-y-auto transition-colors duration-300 ${isFloating ? 'bg-slate-950/80' : 'bg-slate-950'}`}>
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-bold text-white">DJ Hub</h2>
                     <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded font-bold">ARTIST</span>
                 </div>
-                <button
-                    onClick={() => setShowSettings(true)}
-                    className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition text-slate-400 hover:text-white"
-                    title="Settings"
-                >
-                    <Settings size={20} />
-                </button>
-                <button
-                    onClick={() => logout()}
-                    className="p-2 bg-slate-800 hover:bg-red-900/30 hover:text-red-400 rounded-lg transition"
-                    title="Log Out"
-                >
-                    <LogOut size={20} />
-                </button>
+                <div className="flex gap-2">
+                    {isElectron && (
+                        <button
+                            onClick={toggleFloatingMode}
+                            className={`p-2 rounded-lg transition ${isFloating ? 'bg-blue-500/10 text-blue-400' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                            title="Toggle Floating Mode"
+                        >
+                            <Layers size={20} />
+                        </button>
+                    )}
+                    <button
+                        onClick={() => setShowSettings(true)}
+                        className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition text-slate-400 hover:text-white"
+                        title="Settings"
+                    >
+                        <Settings size={20} />
+                    </button>
+                    <button
+                        onClick={() => logout()}
+                        className="p-2 bg-slate-800 hover:bg-red-900/30 hover:text-red-400 rounded-lg transition"
+                        title="Log Out"
+                    >
+                        <LogOut size={20} />
+                    </button>
+                </div>
             </div>
 
             {/* RECENT ACTIVITY (Stub) */}

@@ -3,10 +3,13 @@ import { Event, Series, Venue } from '../types';
 import { Plus, MapPin, Shuffle, X as XIcon, Calendar, ArrowLeft, Check, Music } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import { updateEvent, createEvent, uploadEventImage, searchUsers, searchDjs, createVenue, updateEventAsAdmin } from '../services/firebase';
+import { updateEvent, createEvent, uploadEventImage, searchUsers, searchDjs, createVenue, updateEventAsAdmin, subscribeToUserProfile } from '../services/firebase';
 import { searchVenuesExternal, getCoordinatesFromLocation } from '../services/geminiService';
+import { getLexiconPlaylists } from '../services/lexiconService';
 import { UserProfile } from '../types';
 import { SeriesModal } from './SeriesModal';
+import { MusicSourceConfig } from './MusicSourceConfig';
+import { Database } from 'lucide-react';
 
 interface EventModalProps {
     editingEvent: Partial<Event>;
@@ -736,6 +739,16 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                                 );
                             })()}
                         </div>
+
+                        {/* Music Source Configuration (Requires Admin/DJ with Lexicon Setup) */}
+                        {editingEvent.ownerId && (
+                            <MusicSourceConfig
+                                editingEvent={editingEvent}
+                                setEditingEvent={setEditingEvent}
+                                markDirty={markDirty}
+                                ownerId={editingEvent.ownerId}
+                            />
+                        )}
 
                         {/* Description */}
                         <div>

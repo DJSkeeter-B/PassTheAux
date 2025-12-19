@@ -34,6 +34,7 @@ export interface UserProfile {
   attendedEvents?: Event[];
   allowRepeatRequests?: boolean; // DJ Default Setting
   isActive?: boolean;
+  lexiconConfig?: LexiconConfig;
   lexiconConnectionEnabled?: boolean; // Integration Feature
 }
 
@@ -84,10 +85,18 @@ export interface Event {
   seriesOrder?: number;
   allowRepeats?: boolean; // Phase 8: If true, previously played songs can be requested again
   requestsPausedUntil?: number; // Timestamp for when requests automatically turn back on
+  searchSources?: ('SPOTIFY' | 'LEXICON')[]; // Which services to search
+  lexiconPlaylistIds?: string[]; // If using Lexicon, limit to these playlists
   // Search Integrations
   allowLexiconSearch?: boolean; // Defaults to false
   allowSpotifySearch?: boolean; // Defaults to true
   hasAdminViewed?: boolean; // Notification Tracking
+}
+
+export interface LexiconConfig {
+  enabled: boolean;
+  host: string;
+  apiKey?: string;
 }
 
 export interface Venue {
