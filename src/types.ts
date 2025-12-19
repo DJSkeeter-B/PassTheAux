@@ -51,6 +51,7 @@ export interface Series {
   dayOfWeek?: number; // 0=Sun, 1=Mon...
   weekOfMonth?: number; // 1=1st, 2=2nd... (for Monthly)
   autoCreate?: boolean; // If true, system auto-creates pending events
+  hasAdminViewed?: boolean; // Notification Tracking
 }
 
 export interface Event {
@@ -85,6 +86,7 @@ export interface Event {
   // Search Integrations
   allowLexiconSearch?: boolean; // Defaults to false
   allowSpotifySearch?: boolean; // Defaults to true
+  hasAdminViewed?: boolean; // Notification Tracking
 }
 
 export interface Venue {

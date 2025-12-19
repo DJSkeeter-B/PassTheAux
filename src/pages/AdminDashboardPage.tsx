@@ -3,14 +3,14 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { db, auth } from '../../firebaseConfig';
-import { subscribeToDjRequests, subscribeToAllDjs, createVenue, approveVenue, deleteVenue, processDjApplication, saveGlobalConfig, subscribeToSeries, subscribeToAllSeries, adminDeleteUser, cancelAccountDeletion, resetEventsAndRequests, subscribeToDeletionRequests, reauthenticateUser, toggleDjActiveStatus } from '../services/firebase';
+import { subscribeToDjRequests, subscribeToAllDjs, createVenue, approveVenue, deleteVenue, processDjApplication, saveGlobalConfig, subscribeToSeries, subscribeToAllSeries, adminDeleteUser, cancelAccountDeletion, resetEventsAndRequests, subscribeToDeletionRequests, reauthenticateUser, toggleDjActiveStatus, searchUsers, markAsViewed, checkUserArchive, toggleUserHistory } from '../services/firebase';
 // ... (imports unchanged)
 
 // ... inside component ...
 
 
 import { UserProfile, Event, Series, Venue } from '../types';
-import { LogOut, Bell, Plus, Calendar, Headphones, Edit2, Settings, AlertTriangle, Trash2 } from 'lucide-react';
+import { LogOut, Bell, Plus, Calendar, Headphones, Edit2, Settings, AlertTriangle, Trash2, X, Music, CheckCircle } from 'lucide-react';
 import { searchVenuesExternal } from '../services/geminiService';
 import { EventModal } from '../components/EventModal';
 import { SettingsModal } from '../components/SettingsModal';
@@ -38,6 +38,12 @@ export const AdminDashboardPage: React.FC = () => {
     // Config state
     const [localConfig, setLocalConfig] = useState(config);
     useEffect(() => { setLocalConfig(config); }, [config]);
+
+    // User Management State
+    const [userSearchTerm, setUserSearchTerm] = useState('');
+    const [userSearchResults, setUserSearchResults] = useState<UserProfile[]>([]);
+    const [selectedUserForHistory, setSelectedUserForHistory] = useState<UserProfile | null>(null);
+    const [archiveStatus, setArchiveStatus] = useState<any>(null);
 
     useEffect(() => {
         if (user?.role === 'ADMIN') {
@@ -167,7 +173,25 @@ export const AdminDashboardPage: React.FC = () => {
                         alertType: 'VENUE'
                     }));
 
-                    const allNotifications = [...venueRequests, ...incompleteVenues, ...djRequests, ...delRequests, ...eventAlerts, ...venueAlerts];
+                    // 6. New Events (Unseen by Admin)
+                    const newEvents = events.filter(e => !e.isArchived && e.hasAdminViewed === false && new Date(e.date) > new Date()).map(e => ({
+                        type: 'NEW_EVENT',
+                        id: e.id,
+                        title: `New Event: ${e.title}`,
+                        subtitle: `${new Date(e.date).toLocaleDateString()} @ ${e.venueName}`,
+                        data: e
+                    }));
+
+                    // 7. New Series (Unseen by Admin)
+                    const newSeriesList = mySeries.filter(s => s.hasAdminViewed === false).map(s => ({
+                        type: 'NEW_SERIES',
+                        id: s.id,
+                        title: `New Series: ${s.title}`,
+                        subtitle: `${s.frequency} Series`,
+                        data: s
+                    }));
+
+                    const allNotifications = [...venueRequests, ...incompleteVenues, ...djRequests, ...delRequests, ...eventAlerts, ...venueAlerts, ...newEvents, ...newSeriesList];
 
                     if (allNotifications.length === 0) return null;
 
@@ -198,7 +222,24 @@ export const AdminDashboardPage: React.FC = () => {
                                                 <button onClick={() => processDjApplication(notif.id, true)} className="text-xs bg-green-600 px-2 py-1 rounded text-white font-bold">Approve</button>
                                             )}
                                             {notif.type === 'DELETION_REQUEST' && (
-                                                <button onClick={() => document.getElementById('danger-zone')?.scrollIntoView({ behavior: 'smooth' })} className="text-xs border border-red-500/50 text-red-400 px-2 py-1 rounded font-bold hover:bg-red-900/20">Go to Danger Zone</button>
+                                                <button onClick={() => {
+                                                    const element = document.getElementById(`deletion-request-${notif.id}`);
+                                                    if (element) {
+                                                        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+                                                        // Wait for scroll to likely finish/start before highlighting
+                                                        setTimeout(() => {
+                                                            element.classList.add('bg-red-500/40', 'ring-4', 'ring-red-500'); // Stronger highlight
+
+                                                            // Remove after a longer delay
+                                                            setTimeout(() => {
+                                                                element.classList.remove('bg-red-500/40', 'ring-4', 'ring-red-500');
+                                                            }, 3000);
+                                                        }, 500);
+                                                    } else {
+                                                        document.getElementById('danger-zone')?.scrollIntoView({ behavior: 'smooth' });
+                                                    }
+                                                }} className="text-xs border border-red-500/50 text-red-400 px-2 py-1 rounded font-bold hover:bg-red-900/20">Go to Danger Zone</button>
                                             )}
                                             {notif.type === 'MISSING_INFO' && (
                                                 <button
@@ -214,6 +255,33 @@ export const AdminDashboardPage: React.FC = () => {
                                                 >
                                                     Fix
                                                 </button>
+                                            )}
+                                            {(notif.type === 'NEW_EVENT' || notif.type === 'NEW_SERIES') && (
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => {
+                                                            const targetId = notif.type === 'NEW_EVENT' ? `event-${notif.id}` : `series-${notif.id}`;
+                                                            const element = document.getElementById(targetId);
+                                                            if (element) {
+                                                                element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                                element.classList.add('bg-purple-500/30', 'ring-2', 'ring-purple-500');
+                                                                setTimeout(() => element.classList.remove('bg-purple-500/30', 'ring-2', 'ring-purple-500'), 2000);
+                                                            }
+                                                        }}
+                                                        className="text-xs bg-slate-800 text-white px-2 py-1 rounded font-bold hover:bg-slate-700"
+                                                    >
+                                                        Jump
+                                                    </button>
+                                                    <button
+                                                        onClick={async () => {
+                                                            await markAsViewed(notif.type === 'NEW_EVENT' ? 'events' : 'series', notif.id);
+                                                        }}
+                                                        title="Dismiss"
+                                                        className="p-1 text-slate-500 hover:text-white"
+                                                    >
+                                                        <X size={14} />
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
@@ -261,8 +329,9 @@ export const AdminDashboardPage: React.FC = () => {
                                         return (
                                             <div
                                                 key={evt.id}
+                                                id={`event-${evt.id}`}
                                                 className={`
-                                                    bg-slate-900 border rounded-xl p-4 flex justify-between items-center group transition
+                                                    bg-slate-900 border rounded-xl p-4 flex justify-between items-center group transition duration-500
                                                     ${isPast ? 'border-slate-800/60 opacity-75 hover:opacity-100' : 'border-slate-800 hover:border-slate-600'}
                                                 `}
                                             >
@@ -296,6 +365,39 @@ export const AdminDashboardPage: React.FC = () => {
                             </div>
                         ));
                     })()}
+                </div>
+            </section>
+
+            {/* SERIES SECTION (New) */}
+            <section className="flex flex-col min-h-[200px] mb-6">
+                <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 py-2 border-b border-white/10 mb-2 flex justify-between items-center shrink-0">
+                    <h3 className="font-bold text-slate-400 text-sm uppercase tracking-wider">Series</h3>
+                </div>
+
+                <div className="overflow-y-auto pr-1 pb-4 space-y-2 max-h-[300px]">
+                    {mySeries.length === 0 ? (
+                        <p className="text-slate-500 text-xs italic p-4 border border-dashed border-slate-800 rounded-lg">No series found.</p>
+                    ) : (
+                        mySeries.map(series => (
+                            <div
+                                key={series.id}
+                                id={`series-${series.id}`}
+                                className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex justify-between items-center group hover:border-purple-500/30 transition duration-500"
+                            >
+                                <div>
+                                    <h4 className="font-bold text-white text-sm">{series.title}</h4>
+                                    <div className="text-xs text-slate-500 flex items-center gap-2">
+                                        <span className="text-purple-400">{series.frequency}</span>
+                                        <span>•</span>
+                                        <span>Owned by {series.ownerId.substring(0, 6)}...</span>
+                                    </div>
+                                </div>
+                                <div className="text-slate-600">
+                                    <Music size={16} />
+                                </div>
+                            </div>
+                        ))
+                    )}
                 </div>
             </section>
 
@@ -442,6 +544,123 @@ export const AdminDashboardPage: React.FC = () => {
                 </div>
             </section>
 
+            {/* USER MANAGEMENT SECTION */}
+            <section>
+                <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 py-2 border-b border-white/10 mb-4">
+                    <h3 className="font-bold text-slate-400 text-sm uppercase tracking-wider">User Directory</h3>
+                </div>
+
+                {/* User Search & Management */}
+                <div className="bg-slate-900 p-4 rounded-xl border border-slate-800 space-y-4">
+                    <div className="relative">
+                        <div className="flex gap-2">
+                            <input
+                                className="flex-1 bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white"
+                                placeholder="Search users by name or username..."
+                                onChange={async (e) => {
+                                    const term = e.target.value;
+                                    setUserSearchTerm(term);
+                                    if (term.length >= 3) {
+                                        const results = await searchUsers(term);
+                                        setUserSearchResults(results);
+                                    } else {
+                                        setUserSearchResults([]);
+                                    }
+                                }}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Results List */}
+                    {userSearchResults.length > 0 && (
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {userSearchResults.map(u => (
+                                <div key={u.id} className="p-3 bg-slate-950/50 rounded-lg flex items-center justify-between border border-white/5">
+                                    <div className="flex items-center gap-3">
+                                        <img src={u.avatarUrl} className="w-8 h-8 rounded-full" alt={u.name} />
+                                        <div>
+                                            <p className="font-bold text-white text-sm">{u.name}</p>
+                                            <a href={`/p/${u.username}`} target="_blank" rel="noreferrer" className="text-xs text-purple-400 hover:underline">@{u.username}</a>
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={async () => {
+                                            setSelectedUserForHistory(u);
+                                            // Status check
+                                            const status = await checkUserArchive(u.email || '');
+                                            setArchiveStatus(status);
+                                        }}
+                                        className="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded font-bold text-white transition"
+                                    >
+                                        Manage
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* History Management Panel */}
+                    {selectedUserForHistory && (
+                        <div className="mt-4 p-4 bg-purple-900/10 border border-purple-500/30 rounded-xl space-y-3 animate-in fade-in zoom-in-95">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <h4 className="font-bold text-purple-300 text-sm">History Management: {selectedUserForHistory.name}</h4>
+                                    <p className="text-xs text-slate-400">Manage connection to past account data.</p>
+                                </div>
+                                <button onClick={() => { setSelectedUserForHistory(null); setArchiveStatus(null); }} className="text-slate-500 hover:text-white"><X size={16} /></button>
+                            </div>
+
+                            {archiveStatus ? (
+                                <div className="space-y-3">
+                                    <div className="bg-black/40 p-2 rounded text-xs space-y-1">
+                                        <div className="flex justify-between"><span className="text-slate-500">Original UID:</span> <span className="font-mono text-slate-300">{archiveStatus.originalUid}</span></div>
+                                        <div className="flex justify-between"><span className="text-slate-500">Deleted At:</span> <span className="text-slate-300">{archiveStatus.deletedAt ? new Date(archiveStatus.deletedAt.seconds * 1000).toLocaleDateString() : 'Unknown'}</span></div>
+                                        <div className="flex justify-between"><span className="text-slate-500">Status:</span>
+                                            <span className={`font-bold ${archiveStatus.reconnectedToUid === selectedUserForHistory.id ? 'text-green-400' : 'text-slate-400'}`}>
+                                                {archiveStatus.reconnectedToUid === selectedUserForHistory.id ? 'CONNECTED' : (archiveStatus.reconnectedToUid ? 'Linked to Other' : 'DISCONNECTED')}
+                                            </span>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex gap-2">
+                                        {archiveStatus.reconnectedToUid === selectedUserForHistory.id ? (
+                                            <button
+                                                onClick={async () => {
+                                                    if (!confirm("Disconnect history? Events will revert to original owner.")) return;
+                                                    await toggleUserHistory(selectedUserForHistory.id, selectedUserForHistory.email!, 'DISCONNECT');
+                                                    setArchiveStatus({ ...archiveStatus, reconnectedToUid: null });
+                                                    alert("Disconnected.");
+                                                }}
+                                                className="flex-1 bg-slate-700 hover:bg-slate-600 text-white font-bold py-2 rounded text-xs"
+                                            >
+                                                Disconnect History
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={async () => {
+                                                    if (!confirm(`Connect history from ${archiveStatus.deletedAt ? new Date(archiveStatus.deletedAt.seconds * 1000).toLocaleDateString() : 'Archive'}?`)) return;
+                                                    await toggleUserHistory(selectedUserForHistory.id, selectedUserForHistory.email!, 'CONNECT');
+                                                    setArchiveStatus({ ...archiveStatus, reconnectedToUid: selectedUserForHistory.id });
+                                                    alert("Connected.");
+                                                }}
+                                                className="flex-1 bg-purple-600 hover:bg-purple-500 text-white font-bold py-2 rounded text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                                                disabled={!!archiveStatus.reconnectedToUid}
+                                            >
+                                                {archiveStatus.reconnectedToUid ? 'Unavailable (Linked)' : 'Connect History'}
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="text-center py-4 bg-slate-950/30 rounded text-slate-500 text-xs italic">
+                                    No archived history found for {selectedUserForHistory.email}.
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+            </section>
+
             {/* Config Section */}
             <section>
                 <div className="sticky top-0 bg-black/80 backdrop-blur-md z-10 py-2 border-b border-white/10 mb-4">
@@ -480,7 +699,11 @@ export const AdminDashboardPage: React.FC = () => {
                         ) : (
                             <div className="space-y-2">
                                 {deletionRequests.map(req => (
-                                    <div key={req.id} className="bg-slate-900 border border-red-500/20 p-3 rounded-lg flex items-center justify-between">
+                                    <div
+                                        key={req.id}
+                                        id={`deletion-request-${req.id}`}
+                                        className={`bg-slate-900 border border-red-500/20 p-3 rounded-lg flex items-center justify-between transition-all duration-1000 ${viewingVenue?.id === req.id ? 'bg-red-900/40 ring-2 ring-red-500' : ''}`}
+                                    >
                                         <div className="flex items-center gap-3">
                                             <div className="bg-red-500/10 p-2 rounded-full text-red-400">
                                                 <Trash2 size={16} />
@@ -497,8 +720,11 @@ export const AdminDashboardPage: React.FC = () => {
                                                     if (confirm(`PERMANENTLY DELETE user ${req.name}? This cannot be undone.`)) {
                                                         try {
                                                             await adminDeleteUser(req.id);
-                                                            alert("User deleted.");
-                                                        } catch (e) { alert("Delete failed"); console.error(e); }
+                                                            alert("User and their data deleted successfully.");
+                                                        } catch (e: any) {
+                                                            alert(`Delete failed: ${e.message || "Unknown error"}`);
+                                                            console.error("Admin Delete Error:", e);
+                                                        }
                                                     }
                                                 }}
                                                 className="px-3 py-1.5 bg-red-600 hover:bg-red-500 text-white text-xs font-bold rounded transition shadow-lg shadow-red-900/20"

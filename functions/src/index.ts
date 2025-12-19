@@ -145,6 +145,8 @@ export const createUserDoc = functionsV1.auth.user().onCreate(async (user: any) 
   }
 });
 
+// TRIGGER: cleanupUserData REMOVED per user request to preserve event history.
+
 // Admin Callable Function to Delete Users
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 
@@ -168,16 +170,164 @@ export const deleteAccountAdmin = onCall(async (request) => {
   }
 
   try {
-    // 2. Delete Auth User
+    console.log(`Admin ${callerUid} deleting user ${targetUserId} (keeping data)...`);
+
+    // 2. Archive User for potential future reconnection
+    const targetUserDoc = await db.collection('users').doc(targetUserId).get();
+    const targetUserData = targetUserDoc.data();
+
+    if (targetUserData && targetUserData.email) {
+      // Use Email as ID for easy lookup by new account
+      await db.collection('archived_users').doc(targetUserData.email).set({
+        originalUid: targetUserId,
+        email: targetUserData.email,
+        displayName: targetUserData.name || targetUserData.displayName || 'Unknown',
+        deletedAt: FieldValue.serverTimestamp(),
+        reconnectedToUid: null
+      });
+      console.log(`Archived user ${targetUserId} under email ${targetUserData.email}`);
+    }
+
+    // 3. Delete Auth User
     await admin.auth().deleteUser(targetUserId);
 
-    // 3. Delete Firestore User Doc
+    // 4. Delete Firestore User Doc
     await db.collection('users').doc(targetUserId).delete();
 
-    console.log(`Admin ${callerUid} deleted user ${targetUserId}`);
+    console.log(`Admin ${callerUid} deleted user ${targetUserId}. Data preserved.`);
     return { success: true };
   } catch (error: any) {
     console.error("Delete Account Error:", error);
+    throw new HttpsError('internal', error.message || "Failed to delete user");
+  }
+});
+
+export const toggleUserHistory = onCall(async (request) => {
+  // 1. Verify Admin
+  const callerUid = request.auth?.uid;
+  if (!callerUid) throw new HttpsError('unauthenticated', 'User must be logged in.');
+  const callerDoc = await db.collection('users').doc(callerUid).get();
+  if (callerDoc.data()?.role !== 'ADMIN') throw new HttpsError('permission-denied', 'Only admins can toggle history.');
+
+  const { targetUserId, email, action } = request.data; // action: 'CONNECT' | 'DISCONNECT'
+
+  if (!targetUserId || !email || !action) {
+    throw new HttpsError('invalid-argument', 'Missing targetUserId, email, or action.');
+  }
+
+  const archiveRef = db.collection('archived_users').doc(email);
+  const archiveDoc = await archiveRef.get();
+
+  if (!archiveDoc.exists) {
+    throw new HttpsError('not-found', 'No archived history found for this email.');
+  }
+
+  const archiveData = archiveDoc.data();
+  const originalUid = archiveData?.originalUid;
+
+  if (!originalUid) throw new HttpsError('internal', 'Corrupt archive record.');
+
+  const batch = db.batch();
+  let count = 0;
+
+  try {
+    if (action === 'CONNECT') {
+      // Transfer Old -> New
+      if (archiveData?.reconnectedToUid && archiveData.reconnectedToUid !== targetUserId) {
+        throw new HttpsError('failed-precondition', 'History already connected to another user.');
+      }
+
+      // 1. Events
+      const events = await db.collection('events').where('ownerId', '==', originalUid).get();
+      events.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          ownerId: targetUserId,
+          'meta.originalOwnerId': originalUid // breadcrumb for revert
+        });
+        count++;
+      });
+
+      // 2. Series
+      const series = await db.collection('series').where('ownerId', '==', originalUid).get();
+      series.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          ownerId: targetUserId,
+          'meta.originalOwnerId': originalUid
+        });
+        count++;
+      });
+
+      // 3. Songs (Requests)
+      const songs = await db.collection('songs').where('requesterId', '==', originalUid).get();
+      songs.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          requesterId: targetUserId,
+          'meta.originalRequesterId': originalUid
+        });
+        count++;
+      });
+
+      // Update Archive Status
+      batch.update(archiveRef, { reconnectedToUid: targetUserId });
+
+    } else if (action === 'DISCONNECT') {
+      // Revert New -> Old (Only items that have the breadcrumb)
+
+      // 1. Events
+      const events = await db.collection('events')
+        .where('ownerId', '==', targetUserId)
+        .where('meta.originalOwnerId', '==', originalUid)
+        .get();
+
+      events.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          ownerId: originalUid,
+          'meta.originalOwnerId': FieldValue.delete()
+        });
+        count++;
+      });
+
+      // 2. Series
+      const series = await db.collection('series')
+        .where('ownerId', '==', targetUserId)
+        .where('meta.originalOwnerId', '==', originalUid)
+        .get();
+
+      series.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          ownerId: originalUid,
+          'meta.originalOwnerId': FieldValue.delete()
+        });
+        count++;
+      });
+
+      // 3. Songs
+      const songs = await db.collection('songs')
+        .where('requesterId', '==', targetUserId)
+        .where('meta.originalRequesterId', '==', originalUid)
+        .get();
+
+      songs.docs.forEach(doc => {
+        batch.update(doc.ref, {
+          requesterId: originalUid,
+          'meta.originalRequesterId': FieldValue.delete()
+        });
+        count++;
+      });
+
+      // Update Archive Status
+      batch.update(archiveRef, { reconnectedToUid: null });
+    }
+
+    if (count > 0 || action === 'DISCONNECT') {
+      await batch.commit();
+    }
+
+    console.log(`History ${action} for ${targetUserId} / ${originalUid}. Moved ${count} items.`);
+    return { success: true, count };
+
+  } catch (error: any) {
+    console.error("History Toggle Error:", error);
     throw new HttpsError('internal', error.message);
   }
 });

@@ -36,6 +36,21 @@ const createWindow = () => {
         mainWindow.setAlwaysOnTop(shouldFloat, 'floating');
         mainWindow.setVisibleOnAllWorkspaces(shouldFloat); // Visible on all desktops
         // We might want to adjust the size or look here too
+        if (shouldFloat) {
+            // Initial float size - matched to collapsed state for now, or expanded?
+            // Let's default to a reasonable "Expanded" size for initial float toggle if we don't have partial state
+            // Actually, the widget will immediately resize it likely.
+            // mainWindow.setSize(350, 600); 
+        } else {
+            mainWindow.setSize(1000, 800);
+            mainWindow.center();
+        }
+        return true;
+    });
+
+    // Resize Window IPC
+    ipcMain.handle('resize-window', (event, width, height) => {
+        mainWindow.setSize(width, height, true); // true = animate on mac
         return true;
     });
 

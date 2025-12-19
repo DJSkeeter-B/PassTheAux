@@ -41,6 +41,6 @@
     animation-name: scroll-text;
     animation-timing-function: linear;
     animation-iteration-count: infinite;
-    animation-direction: alternate;
-    /* Scroll back and forth */
+    animation-iteration-count: infinite;
+    /* Scroll back and forth removed for sync look */
 }

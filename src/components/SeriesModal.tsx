@@ -181,9 +181,9 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
             if (seriesPosterFile) {
                 try {
                     posterUrl = await uploadEventImage(seriesPosterFile);
-                } catch (e) {
+                } catch (e: any) {
                     console.error("Poster upload failed", e);
-                    alert("Poster upload failed, proceeding without it.");
+                    alert(`Poster upload failed: ${e.message || "Unknown error"}. Proceeding without it.`);
                 }
             }
 

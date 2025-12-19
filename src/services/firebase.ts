@@ -17,11 +17,17 @@ import {
   UserCredential,
   EmailAuthProvider,
   reauthenticateWithCredential,
-  reauthenticateWithPopup
+  reauthenticateWithPopup,
+  sendPasswordResetEmail
 } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, auth, storage } from "../../firebaseConfig";
 import { Song, SongStatus, Event, UserProfile, AppConfig, UserRole, SocialLink, Series, HistoryItem, Venue, GlobalSearchResult } from "../types";
+
+// INCREASE TIMEOUTS: Default is 2min, increasing to 10min for slow networks
+storage.maxOperationRetryTime = 600000;
+storage.maxUploadRetryTime = 600000;
+
 
 const sanitizeData = (data: any) => {
   return JSON.parse(JSON.stringify(data));
@@ -68,8 +74,7 @@ export const updateUserProfile = async (userId: string, data: Partial<UserProfil
   }
 };
 
-// Hardcoded Admin Emails (Security Override)
-const ADMIN_EMAILS = ['brandon.skeeterb@gmail.com', 'djskeeterb@gmail.com'];
+// Hardcoded Admin Emails removed. Roles must be managed via Firestore.
 
 export const subscribeToUserProfile = (uid: string, callback: (profile: UserProfile | null) => void) => {
   return onSnapshot(doc(db, "users", uid), (docSnap) => {
@@ -77,14 +82,7 @@ export const subscribeToUserProfile = (uid: string, callback: (profile: UserProf
       const data = docSnap.data();
       let role = (data.role as UserRole) || 'LISTENER';
 
-      // ENFORCE ADMIN ROLE IF EMAIL MATCHES (Frontend Side)
-      if (auth.currentUser?.email && ADMIN_EMAILS.includes(auth.currentUser.email)) {
-        role = 'ADMIN';
-        // Auto-fix DB if needed (Ensure DB reflects Admin status so security rules pass)
-        if (data.role !== 'ADMIN') {
-          updateDoc(doc(db, "users", uid), { role: 'ADMIN' }).catch(console.error);
-        }
-      }
+      // Logic removed: Admin role must be set in Firestore.
 
       const profile: UserProfile = {
         id: uid,
@@ -214,17 +212,7 @@ export const signInWithGoogle = async (): Promise<UserProfile> => {
       const data = docSnap.data();
       let role = (data.role as UserRole) || 'LISTENER';
 
-      // CRITICAL SECURITY ENFORCEMENT
-      if (ADMIN_EMAILS.includes(email)) {
-        if (role !== 'ADMIN') {
-          role = 'ADMIN'; // Force upgrade correct user
-          await updateDoc(userDocRef, { role: 'ADMIN' });
-        }
-      } else if (role === 'ADMIN') {
-        // Demote imposter
-        role = data.djStatus === 'APPROVED' ? 'DJ' : 'LISTENER';
-        await updateDoc(userDocRef, { role });
-      }
+      // Logic removed: Admin role is now solely determined by Firestore data.
 
       profile = {
         id: user.uid,
@@ -240,8 +228,8 @@ export const signInWithGoogle = async (): Promise<UserProfile> => {
       // New Google User
       const username = email.split('@')[0] || `user_${user.uid.substring(0, 6)}`;
 
-      // Auto-grant Admin on first sign-up
-      const role = ADMIN_EMAILS.includes(email) ? 'ADMIN' : 'LISTENER';
+      // Default role is always LISTENER
+      const role = 'LISTENER';
 
       profile = {
         id: user.uid,
@@ -356,6 +344,23 @@ export const adminDeleteUser = async (targetUserId: string) => {
   const functions = getFunctions();
   const deleteFn = httpsCallable(functions, 'deleteAccountAdmin');
   await deleteFn({ targetUserId });
+};
+
+export const toggleUserHistory = async (targetUserId: string, email: string, action: 'CONNECT' | 'DISCONNECT') => {
+  const functions = getFunctions();
+  const toggleFn = httpsCallable(functions, 'toggleUserHistory');
+  const result = await toggleFn({ targetUserId, email, action });
+  return result.data as { success: boolean, count: number };
+};
+
+export const checkUserArchive = async (email: string) => {
+  if (!email) return null;
+  const docRef = doc(db, "archived_users", email);
+  const snap = await getDoc(docRef);
+  if (snap.exists()) {
+    return snap.data();
+  }
+  return null;
 };
 
 export const subscribeToDeletionRequests = (callback: (users: UserProfile[]) => void) => {
@@ -538,7 +543,7 @@ export const searchDjs = async (searchTerm: string): Promise<UserProfile[]> => {
 
 export const resetDjRoles = async () => {
   const ALLOWED_DJS = ['TestAdmin', 'Auxmaster', 'PartyHost'];
-  const ADMIN_EMAILS = ['brandon.skeeterb@gmail.com', 'djskeeterb@gmail.com'];
+  // const ADMIN_EMAILS removed - we rely on role check only
 
   // Get all users with DJ or ADMIN role
   const q = query(collection(db, "users"), where("role", "in", ["DJ", "ADMIN"]));
@@ -592,7 +597,7 @@ export const subscribeToAllSeries = (callback: (series: Series[]) => void) => {
 };
 
 export const createSeries = async (seriesData: Omit<Series, 'id'>): Promise<string> => {
-  const docRef = await addDoc(collection(db, "series"), sanitizeData(seriesData));
+  const docRef = await addDoc(collection(db, "series"), sanitizeData({ ...seriesData, hasAdminViewed: false }));
   return docRef.id;
 };
 
@@ -654,7 +659,7 @@ export const createEvent = async (eventData: Omit<Event, 'id'>, userId?: string)
     }
   }
 
-  const docRef = await addDoc(collection(db, "events"), sanitizeData({ ...eventData, allowRepeats }));
+  const docRef = await addDoc(collection(db, "events"), sanitizeData({ ...eventData, allowRepeats, hasAdminViewed: false }));
   return docRef.id;
 };
 
@@ -796,8 +801,13 @@ export const resetEventsAndRequests = async () => {
     console.log(`Deleted ${snap.size} documents from ${colName}`);
     totalDeleted += snap.size;
   }
-
   return { success: true, count: totalDeleted };
+};
+
+export const markAsViewed = async (collectionName: 'events' | 'series', docId: string) => {
+  await updateDoc(doc(db, collectionName, docId), {
+    hasAdminViewed: true
+  });
 };
 
 export const subscribeToVenues = (callback: (venues: Venue[]) => void) => {
@@ -1162,4 +1172,9 @@ export const searchVenuesGlobal = async (term: string, limitCount: number = 5): 
     console.warn("Venue search error:", e);
     return [];
   }
+};
+
+export const resetUserPassword = async (email: string) => {
+  if (!email) throw new Error("Email is required.");
+  await sendPasswordResetEmail(auth, email);
 };

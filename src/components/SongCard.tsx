@@ -1,6 +1,7 @@
 import React from 'react';
 import { Song, SongStatus } from '../types';
 import { ThumbsUp, ThumbsDown, Check, X, Clock, Play, Sparkles } from 'lucide-react';
+import { ScrollingText } from './ScrollingText';
 
 interface SongCardProps {
   song: Song;
@@ -68,9 +69,15 @@ export const SongCard: React.FC<SongCardProps> = ({
         )}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <h3 className="font-semibold text-white truncate text-lg leading-tight">{song.title}</h3>
-        <p className="text-slate-400 text-sm truncate">{song.artist}</p>
+      <div className="flex-1 min-w-0 overflow-hidden">
+        <ScrollingText
+          text={song.title}
+          className="font-semibold text-white text-lg leading-tight"
+        />
+        <ScrollingText
+          text={song.artist}
+          className="text-slate-400 text-sm mt-0.5"
+        />
         <p className="text-slate-500 text-xs truncate mt-0.5">{song.album}</p>
         {song.requesterName && (
           <p className="text-purple-400 text-xs mt-1 flex items-center gap-1">

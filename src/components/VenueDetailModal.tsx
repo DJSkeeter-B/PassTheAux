@@ -121,12 +121,26 @@ export const VenueDetailModal: React.FC<VenueDetailModalProps> = ({ venue, onClo
                                         if (!editData.name || !editData.address) return alert("Need Name and Address for Auto-Fill");
                                         const confirmed = window.confirm("Use Gemini AI to suggest typical hours and description?");
                                         if (confirmed) {
-                                            const data = await enrichVenueData(editData.name, editData.address);
-                                            setEditData(prev => ({
-                                                ...prev,
-                                                description: prev.description || data.description || '',
-                                                hours: prev.hours || data.hours || ''
-                                            }));
+                                            try {
+                                                // Check for API Key first (client-side check purely for UX)
+                                                if (!import.meta.env.VITE_GEMINI_API_KEY) {
+                                                    alert("Gemini API Key is missing in environment variables.");
+                                                    return;
+                                                }
+                                                const data = await enrichVenueData(editData.name, editData.address);
+                                                if (!data.description && !data.hours) {
+                                                    alert("Gemini could not find info for this venue. Please fill manually.");
+                                                    return;
+                                                }
+                                                setEditData(prev => ({
+                                                    ...prev,
+                                                    description: prev.description || data.description || '',
+                                                    hours: prev.hours || data.hours || ''
+                                                }));
+                                            } catch (e: any) {
+                                                console.error("Gemini Error:", e);
+                                                alert("AI Enrichment failed: " + (e.message || "Unknown error"));
+                                            }
                                         }
                                     }}
                                     className="p-2 bg-purple-600 rounded-lg text-white hover:bg-purple-500 transition"

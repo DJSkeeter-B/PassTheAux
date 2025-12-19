@@ -8,6 +8,7 @@ import { subscribeToQueue, subscribeToCheckedInUsers, updateSongStatus, toggleEv
 import { Song, SongStatus, UserProfile } from '../types';
 import { SongCard } from '../components/SongCard';
 import { EventModal } from '../components/EventModal';
+import { DjCrateWidget } from '../components/DjCrateWidget';
 
 export const DjDashboardPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -68,9 +69,22 @@ export const DjDashboardPage: React.FC = () => {
 
     if (!event) return <div className="p-10 text-white">Event not found or loading...</div>;
 
+    // CRAVITY MODE: Render the Widget if floating
+    if (isFloating) {
+        return (
+            <DjCrateWidget
+                queue={queue}
+                onApprove={(id) => handleDJAction(id, 'APPROVE')}
+                onReject={(id) => handleDJAction(id, 'REJECT')}
+                onPlay={(id) => handleDJAction(id, 'PLAYED')}
+                onCloseWidget={toggleFloatingMode} // Toggling off returns to main window
+            />
+        );
+    }
+
     return (
-        <div className={`h-screen flex flex-col pb-20 transition-colors duration-300 ${isFloating ? 'bg-slate-950/80' : 'bg-slate-950'}`}>
-            <div className={`p-4 border-b border-slate-800 flex justify-between items-center sticky top-0 z-20 transition-colors duration-300 ${isFloating ? 'bg-slate-900/80' : 'bg-slate-900'}`}>
+        <div className="h-screen flex flex-col pb-20 bg-slate-950">
+            <div className="p-4 border-b border-slate-800 flex justify-between items-center sticky top-0 z-20 bg-slate-900">
                 <div className="flex items-center gap-3">
                     <button
                         onClick={() => navigate('/dj')}

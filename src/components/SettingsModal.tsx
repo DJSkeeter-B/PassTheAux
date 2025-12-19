@@ -34,7 +34,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ user, onClose }) =
             if (e.code === 'auth/wrong-password') {
                 setError("Incorrect password.");
             } else {
-                setError("Failed to delete account. Please try again.");
+                setError(`Failed to delete account: ${e.message}`);
             }
         } finally {
             setLoading(false);
