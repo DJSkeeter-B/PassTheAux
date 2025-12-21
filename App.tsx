@@ -12,9 +12,9 @@ import { DjHubPage } from './src/pages/DjHubPage';
 import { BottomNav } from './src/components/BottomNav';
 import { GlobalHeader } from './src/components/GlobalHeader';
 import { ProfilePage } from './src/pages/ProfilePage';
+import { CrateModePage } from './src/pages/CrateModePage';
 
-// Proxied import via DjDashboardPage later...
-// import { DjDashboardPage } from './src/pages/DjDashboardPage';
+// ... (other imports same)
 
 /*
     Route Guard Component
@@ -28,75 +28,98 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, all
     }
     return children;
 };
+// ... (ProtectedRoute same)
+
+/*
+    App Layout Wrapper (Handles Conditional Layouts)
+*/
+import { useLocation } from 'react-router-dom';
+
+const AppLayout = () => {
+    const location = useLocation();
+    const isCrateMode = location.pathname.startsWith('/crate');
+
+    // If Crate Mode, just render content without container constraints or headers
+    if (isCrateMode) {
+        return (
+            <div className="w-screen h-screen bg-transparent">
+                <Routes>
+                    <Route path="/crate/:id" element={
+                        <ProtectedRoute allowedRoles={['DJ', 'ADMIN']}>
+                            <CrateModePage />
+                        </ProtectedRoute>
+                    } />
+                </Routes>
+            </div>
+        );
+    }
+
+    // Standard App Layout
+    return (
+        <div
+            className="max-w-md mx-auto min-h-screen bg-slate-950 text-white shadow-2xl relative pb-24 pt-16"
+        >
+            <GlobalHeader />
+            <Routes>
+                <Route path="/login" element={<AuthPage />} />
+
+                <Route path="/" element={
+                    <ProtectedRoute>
+                        <FeedPage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/event/:id" element={
+                    <ProtectedRoute>
+                        <EventDetailsPage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/event/:id/queue" element={
+                    <ProtectedRoute>
+                        <EventQueuePage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/event/:id/search" element={
+                    <ProtectedRoute>
+                        <EventSearchPage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/admin" element={
+                    <ProtectedRoute allowedRoles={['ADMIN']}>
+                        <AdminDashboardPage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/dj" element={
+                    <ProtectedRoute allowedRoles={['DJ', 'ADMIN']}>
+                        <DjHubPage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/profile" element={
+                    <ProtectedRoute>
+                        <ProfilePage />
+                    </ProtectedRoute>
+                } />
+
+                {/* Fallback */}
+                <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+
+            <BottomNav />
+        </div>
+    );
+};
 
 export default function App() {
-    console.log("App Component Rendering...");
     return (
         <AuthProvider>
             <DataProvider>
                 <BrowserRouter>
-                    <div
-                        className="max-w-md mx-auto min-h-screen bg-slate-950 text-white shadow-2xl relative pb-24 pt-16"
-                        ref={(el) => { if (el) console.log("Main App Container Mounted"); }}
-                    >
-                        <GlobalHeader />
-                        <Routes>
-                            <Route path="/login" element={<AuthPage />} />
-
-                            <Route path="/" element={
-                                <ProtectedRoute>
-                                    <FeedPage />
-                                </ProtectedRoute>
-                            } />
-
-                            <Route path="/event/:id" element={
-                                <ProtectedRoute>
-                                    <EventDetailsPage />
-                                </ProtectedRoute>
-                            } />
-
-                            <Route path="/event/:id/queue" element={
-                                <ProtectedRoute>
-                                    <EventQueuePage />
-                                </ProtectedRoute>
-                            } />
-
-                            <Route path="/event/:id/search" element={
-                                <ProtectedRoute>
-                                    <EventSearchPage />
-                                </ProtectedRoute>
-                            } />
-
-                            <Route path="/admin" element={
-                                <ProtectedRoute allowedRoles={['ADMIN']}>
-                                    <AdminDashboardPage />
-                                </ProtectedRoute>
-                            } />
-
-                            <Route path="/dj" element={
-                                <ProtectedRoute allowedRoles={['DJ', 'ADMIN']}>
-                                    <DjHubPage />
-                                </ProtectedRoute>
-                            } />
-
-                            {/* <Route path="/dj/event/:id" element={
-                                <ProtectedRoute allowedRoles={['DJ', 'ADMIN']}>
-                                    <DjDashboardPage />
-                                </ProtectedRoute>
-                            } /> */}
-
-                            <Route path="/profile" element={
-                                <ProtectedRoute>
-                                    <ProfilePage />
-                                </ProtectedRoute>
-                            } />
-
-                            {/* Fallback */}
-                            <Route path="*" element={<Navigate to="/" replace />} />
-                        </Routes>
-
-                        <BottomNav />
-                    </div>
+                    <AppLayout />
                 </BrowserRouter>
             </DataProvider>
         </AuthProvider>

@@ -5,7 +5,7 @@ import { useData } from '../contexts/DataContext';
 import { Series, Event } from '../types';
 import { subscribeToSeries, subscribeToAllSeries } from '../services/firebase';
 import { groupEventsByDate } from '../utils/dateUtils';
-import { LogOut, Bell, Plus, Calendar, Edit2, Headphones, Layers } from 'lucide-react';
+import { LogOut, Bell, Plus, Calendar, Edit2, Headphones, Layers, Minimize2, Maximize2, X, Music } from 'lucide-react';
 import { SeriesModal } from '../components/SeriesModal';
 import { EventModal } from '../components/EventModal';
 import { SettingsModal } from '../components/SettingsModal';
@@ -19,13 +19,34 @@ export const DjHubPage: React.FC = () => {
 
     // Electron Floating State
     const [isFloating, setIsFloating] = useState(false);
+    const [isWidgetCollapsed, setIsWidgetCollapsed] = useState(true);
     const isElectron = !!window.electronAPI;
 
     const toggleFloatingMode = async () => {
         if (!window.electronAPI) return;
         const newState = !isFloating;
         setIsFloating(newState);
-        await window.electronAPI.toggleFloating(newState);
+
+        // Always reset to collapsed when enabling, restore size when disabling
+        if (newState) {
+            setIsWidgetCollapsed(true);
+            await window.electronAPI.toggleFloating(true);
+            await window.electronAPI.resizeWindow(60, 60); // Much smaller
+        } else {
+            await window.electronAPI.toggleFloating(false);
+            await window.electronAPI.resizeWindow(1000, 800);
+        }
+    };
+
+    const toggleWidgetCollapse = async () => {
+        if (!window.electronAPI) return;
+        const newCollapsed = !isWidgetCollapsed;
+        setIsWidgetCollapsed(newCollapsed);
+        if (newCollapsed) {
+            await window.electronAPI.resizeWindow(60, 60);
+        } else {
+            await window.electronAPI.resizeWindow(400, 600);
+        }
     };
 
     // Modals
@@ -44,40 +65,106 @@ export const DjHubPage: React.FC = () => {
         }
     }, [user]);
 
+    // Manage body class for floating mode to suppress global layout styles
+    useEffect(() => {
+        if (isFloating) {
+            document.body.classList.add('floating-widget-mode');
+        } else {
+            document.body.classList.remove('floating-widget-mode');
+        }
+        return () => {
+            document.body.classList.remove('floating-widget-mode');
+        }
+    }, [isFloating]);
+
     const myEvents = user?.role === 'ADMIN' ? events : events.filter(e => e.ownerId === user?.id);
 
+    // WIDGET MODE RENDER (Collapsed)
+    if (isFloating && isWidgetCollapsed) {
+        return (
+            <div className="h-screen w-screen bg-transparent overflow-hidden">
+                <div
+                    onClick={toggleWidgetCollapse}
+                    className="w-full h-full bg-gradient-to-tr from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center cursor-pointer group relative shadow-lg"
+                    style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+                >
+                    <Music className="w-8 h-8 text-white drop-shadow-md" />
+                    {/* Hover Overlay hint */}
+                    <div className="absolute inset-0 bg-black/20 rounded-2xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                        <Maximize2 className="text-white opacity-80" size={20} />
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     return (
-        <div className={`pb-24 px-4 pt-4 space-y-6 h-screen overflow-y-auto transition-colors duration-300 ${isFloating ? 'bg-slate-950/80' : 'bg-slate-950'}`}>
+        <div className={`space-y-6 h-screen overflow-y-auto transition-all duration-300 ${isFloating ? 'bg-slate-950/90 border border-slate-700/50 rounded-2xl p-4 pb-20' : 'pb-24 px-4 pt-4 bg-slate-950'}`}>
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between sticky top-0 z-20 bg-transparent">
                 <div className="flex items-center gap-3">
-                    <h2 className="text-2xl font-bold text-white">DJ Hub</h2>
-                    <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded font-bold">ARTIST</span>
+                    {/* Compact Header for Expanded Widget */}
+                    {isFloating ? (
+                        <h2 className="text-lg font-bold text-white flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span> App Active
+                        </h2>
+                    ) : (
+                        <>
+                            <h2 className="text-2xl font-bold text-white">DJ Hub</h2>
+                            <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded font-bold">ARTIST</span>
+                        </>
+                    )}
                 </div>
                 <div className="flex gap-2">
                     {isElectron && (
-                        <button
-                            onClick={toggleFloatingMode}
-                            className={`p-2 rounded-lg transition ${isFloating ? 'bg-blue-500/10 text-blue-400' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
-                            title="Toggle Floating Mode"
-                        >
-                            <Layers size={20} />
-                        </button>
+                        <>
+                            {/* Collapse/Expand Controls for Floating Mode */}
+                            {isFloating ? (
+                                <div className="flex gap-1 bg-slate-800/80 rounded-lg p-1 backdrop-blur-md">
+                                    <button
+                                        onClick={toggleWidgetCollapse}
+                                        className="p-1.5 hover:bg-slate-700 rounded text-slate-400 hover:text-white"
+                                        title="Minimize to Icon"
+                                    >
+                                        <Minimize2 size={16} />
+                                    </button>
+                                    <button
+                                        onClick={toggleFloatingMode}
+                                        className="p-1.5 hover:bg-red-900/50 rounded text-red-400"
+                                        title="Close Floating Mode"
+                                    >
+                                        <X size={16} />
+                                    </button>
+                                </div>
+                            ) : (
+                                <button
+                                    onClick={toggleFloatingMode}
+                                    className={`p-2 rounded-lg transition ${isFloating ? 'bg-blue-500/10 text-blue-400' : 'bg-slate-800 text-slate-400 hover:text-white'}`}
+                                    title="Toggle Floating Mode"
+                                >
+                                    <Layers size={20} />
+                                </button>
+                            )}
+                        </>
                     )}
-                    <button
-                        onClick={() => setShowSettings(true)}
-                        className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition text-slate-400 hover:text-white"
-                        title="Settings"
-                    >
-                        <Settings size={20} />
-                    </button>
-                    <button
-                        onClick={() => logout()}
-                        className="p-2 bg-slate-800 hover:bg-red-900/30 hover:text-red-400 rounded-lg transition"
-                        title="Log Out"
-                    >
-                        <LogOut size={20} />
-                    </button>
+                    {!isFloating && (
+                        <>
+                            <button
+                                onClick={() => setShowSettings(true)}
+                                className="p-2 bg-slate-800 hover:bg-slate-700 rounded-lg transition text-slate-400 hover:text-white"
+                                title="Settings"
+                            >
+                                <Settings size={20} />
+                            </button>
+                            <button
+                                onClick={() => logout()}
+                                className="p-2 bg-slate-800 hover:bg-red-900/30 hover:text-red-400 rounded-lg transition"
+                                title="Log Out"
+                            >
+                                <LogOut size={20} />
+                            </button>
+                        </>
+                    )}
                 </div>
             </div>
 
@@ -221,15 +308,13 @@ export const DjHubPage: React.FC = () => {
                                                         {isPast ? 'History' : 'Dashboard'}
                                                     </button>
 
-                                                    {isPast && (
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); setEditingEvent(evt); setShowEventModal(true); }}
-                                                            className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded transition opacity-0 group-hover:opacity-100"
-                                                            title="Edit Event Details"
-                                                        >
-                                                            <Edit2 size={14} />
-                                                        </button>
-                                                    )}
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); setEditingEvent(evt); setShowEventModal(true); }}
+                                                        className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 rounded transition opacity-0 group-hover:opacity-100"
+                                                        title="Edit Event Details"
+                                                    >
+                                                        <Edit2 size={14} />
+                                                    </button>
                                                 </div>
                                             </div>
                                         );

@@ -20,9 +20,9 @@ const createWindow = () => {
         frame: false,           // No standard title bar
         transparent: true,      // Allow transparency
         alwaysOnTop: false,     // Default to false, toggleable
-        hasShadow: true,
-        titleBarStyle: 'hiddenInset', // Looks nice on Mac
-        vibrancy: 'under-window', // Glass effect on Mac
+        hasShadow: false,       // Remove shadow for tighter icon feel
+        // titleBarStyle: 'hiddenInset', // REMOVED: We want zero chrome
+        // vibrancy: 'under-window', // REMOVED: We want pure transparency for the shape
         visualEffectState: 'active',
         webPreferences: {
             preload: path.join(__dirname, 'preload.cjs'),

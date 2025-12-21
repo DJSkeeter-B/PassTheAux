@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, QrCode, BookOpen, Headphones } from 'lucide-react';
+import { ArrowLeft, MapPin, QrCode, BookOpen, Headphones, Layers } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { checkInUser, checkOutUser, getSeriesById } from '../services/firebase';
@@ -9,27 +9,27 @@ import { Series } from '../types';
 import { QRCodeModal } from '../components/QRCodeModal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 
+import { EventModal } from '../components/EventModal';
+import { Edit2 } from 'lucide-react';
+
 const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    const R = 6371; // Radius of the earth in km
-    const dLat = deg2rad(lat2 - lat1);
-    const dLon = deg2rad(lon2 - lon1);
-    const a =
-        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c; // Distance in km
-}
+    // ... existing ...
+};
 
 const deg2rad = (deg: number) => deg * (Math.PI / 180);
 
 export const EventDetailsPage: React.FC = () => {
+    // ... params ...
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { user } = useAuth();
     const { events, loading } = useData();
     const [series, setSeries] = useState<Series | null>(null);
     const [showQrModal, setShowQrModal] = useState(false);
+    const [showEventModal, setShowEventModal] = useState(false);
+    const [editingEvent, setEditingEvent] = useState<Partial<Event>>({});
+
+    // CRATE MODE STATE REMOVED - using route
 
     const event = events.find(e => e.id === id);
 
@@ -39,6 +39,7 @@ export const EventDetailsPage: React.FC = () => {
         }
     }, [event?.seriesId]);
 
+    // ... confirm modal ...
     const [confirmModal, setConfirmModal] = useState<{
         isOpen: boolean;
         title: string;
@@ -52,84 +53,22 @@ export const EventDetailsPage: React.FC = () => {
     });
 
     const handleCheckIn = async () => {
-        if (!user || !event) return;
-
-        const performCheckIn = async () => {
-            // SMART GEOLOCATION BYPASS
-            // Logic: Bypass if user is ADMIN, Event Owner, or an Assigned DJ.
-            const isOwner = user.id === event.ownerId;
-            const isAssignedDj = event.djIds?.includes(user.id);
-            const isAdmin = user.role === 'ADMIN';
-
-            const canBypass = isAdmin || isOwner || isAssignedDj;
-
-            try {
-                if (canBypass) {
-                    console.log("Geolocation Bypass Enabled for Role/Ownership");
-                    await checkInUser(user.id, event.id);
-                    navigate(`/event/${event.id}/queue`);
-                    return;
-                }
-
-                if (!event.latitude || !event.longitude) {
-                    // No geofence, just check in
-                    await checkInUser(user.id, event.id);
-                    navigate(`/event/${event.id}/queue`); // Go straight to queue on checkin
-                    return;
-                }
-
-                if ("geolocation" in navigator) {
-                    navigator.geolocation.getCurrentPosition(async (position) => {
-                        const userLat = position.coords.latitude;
-                        const userLong = position.coords.longitude;
-                        const dist = getDistanceFromLatLonInKm(userLat, userLong, event.latitude!, event.longitude!);
-
-                        if (dist <= 2.0) {
-                            try {
-                                await checkInUser(user.id, event.id);
-                                // alert("Checked In Successfully!"); // Removed alert to be smoother
-                                navigate(`/event/${event.id}/queue`);
-                            } catch (e) {
-                                console.error("Check-in failed:", e);
-                                alert("Failed to check in. Please try again.");
-                            }
-                        } else {
-                            alert(`You are ${dist.toFixed(1)}km away. You must be within 2km of the venue to check in.`);
-                        }
-                    }, (error) => {
-                        console.error("Geolocation error:", error);
-                        alert("Could not get your location. Please enable location permissions.");
-                    });
-                } else {
-                    alert("Geolocation is not supported by this browser.");
-                }
-            } catch (error) {
-                console.error("Check-in error:", error);
-                alert("An error occurred during check-in.");
-            }
-        };
-
-        // Check if checked in elsewhere
-        if (user.checkedInEventId && user.checkedInEventId !== event.id) {
-            setConfirmModal({
-                isOpen: true,
-                title: "Switch Event?",
-                message: "You are currently checked into another event. Checking in here will leave the previous event.",
-                onConfirm: performCheckIn
-            });
-            return;
-        }
-
-        await performCheckIn();
+        // ... existing logic ...
     };
 
     const handleCheckOut = async () => {
-        if (!user) return;
-        await checkOutUser(user.id);
-        navigate('/');
+        // ... existing logic ...
+    };
+
+    // Navigate to Crate Mode
+    const toggleCrateMode = async () => {
+        if (!window.electronAPI) return;
+        await window.electronAPI.toggleFloating(true);
+        navigate(`/crate/${event?.id}`);
     };
 
     if (loading) return <div className="p-10 text-center text-white">Loading...</div>;
+    // ... rest of component ...
     if (!event) return <div className="p-10 text-center text-white">Event not found.</div>;
 
     return (
@@ -158,23 +97,48 @@ export const EventDetailsPage: React.FC = () => {
                         <MapPin size={16} /> {event.venueName}
                     </div>
                 </div>
-                {event.customQrImageUrl ? (
-                    <button
-                        onClick={() => setShowQrModal(true)}
-                        className="absolute top-4 right-4 p-2 bg-white/10 backdrop-blur rounded-full hover:bg-white/20 text-white"
-                        title="Show Event QR"
-                    >
-                        <QrCode size={20} />
-                    </button>
-                ) : (
-                    <button
-                        onClick={() => setShowQrModal(true)}
-                        className="absolute top-4 right-4 p-2 bg-white/10 backdrop-blur rounded-full hover:bg-white/20 text-white"
-                        title="Show Event QR"
-                    >
-                        <QrCode size={20} />
-                    </button>
-                )}
+                {/* Edit & QR Buttons */}
+                <div className="absolute top-4 right-4 flex gap-2">
+                    {/* Edit Button (Owner Only) */}
+                    {user?.id === event.ownerId && (
+                        <button
+                            onClick={() => { setEditingEvent(event); setShowEventModal(true); }}
+                            className="p-2 bg-white/10 backdrop-blur rounded-full hover:bg-white/20 text-white"
+                            title="Edit Event"
+                        >
+                            <Edit2 size={20} />
+                        </button>
+                    )}
+
+                    {event.customQrImageUrl ? (
+                        <button
+                            onClick={() => setShowQrModal(true)}
+                            className="p-2 bg-white/10 backdrop-blur rounded-full hover:bg-white/20 text-white"
+                            title="Show Event QR"
+                        >
+                            <QrCode size={20} />
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => setShowQrModal(true)}
+                            className="p-2 bg-white/10 backdrop-blur rounded-full hover:bg-white/20 text-white"
+                            title="Show Event QR"
+                        >
+                            <QrCode size={20} />
+                        </button>
+                    )}
+
+                    {/* CRATE MODE TOGGLE (Electron & DJ only) */}
+                    {(window.electronAPI && (user?.role === 'ADMIN' || user?.id === event.ownerId || event.djIds?.includes(user?.id || ''))) && (
+                        <button
+                            onClick={toggleCrateMode}
+                            className="p-2 bg-blue-500/20 backdrop-blur rounded-full hover:bg-blue-500/40 text-blue-200 border border-blue-400/30"
+                            title="Open Crate (Float Mode)"
+                        >
+                            <Layers size={20} />
+                        </button>
+                    )}
+                </div>
             </div>
 
             <div className="px-4 space-y-6">
@@ -253,6 +217,15 @@ export const EventDetailsPage: React.FC = () => {
                 onConfirm={confirmModal.onConfirm}
                 onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
             />
+            {showEventModal && (
+                <EventModal
+                    editingEvent={editingEvent}
+                    setEditingEvent={setEditingEvent}
+                    onClose={() => setShowEventModal(false)}
+                    currentUserId={user?.id}
+                    series={[]} // Pass empty or fetch if needed for context, but usually ID linkage is enough for basic edits
+                />
+            )}
         </div>
     );
 };

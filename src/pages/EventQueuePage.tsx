@@ -1,65 +1,46 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Music, LogOut, Search, ToggleLeft, ToggleRight, X, Clock, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Music, LogOut, Search, ToggleLeft, ToggleRight, X, Clock, AlertCircle, Edit2, Layers } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { subscribeToQueue, voteSong, updateSongStatus, checkOutUser, toggleEventRequests } from '../services/firebase';
 import { Song, SongStatus } from '../types';
 import { SongCard } from '../components/SongCard';
+import { EventModal } from '../components/EventModal';
+
 
 export const EventQueuePage: React.FC = () => {
+    // ... items ...
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { user } = useAuth();
     const { events } = useData();
     const [queue, setQueue] = useState<Song[]>([]);
     const [showPauseModal, setShowPauseModal] = useState(false);
+    const [showEventModal, setShowEventModal] = useState(false);
+    const [editingEvent, setEditingEvent] = useState<Partial<Event>>({});
 
+    // CRATE MODE STATE REMOVED (Using Route)
+
+    // ... existing ... 
     const event = events.find(e => e.id === id);
-
-    // Permission Check
     const isDj = user && event && (user.role === 'ADMIN' || user.id === event.ownerId || event.djIds?.includes(user.id));
 
-    // Request Status Logic
-    // If requestsPausedUntil is set and in future, it's considered TRUE (Accepting) by default unless we specifically want to block it?
-    // User Requirement: "Turn requests off... until X time".
-    // So if PausedUntil > Now -> Requests are OFF.
-    // If PausedUntil < Now -> Requests are ON (expired).
-    // If acceptingRequests is FALSE and PausedUntil is NULL -> OFF.
-    // Base field `acceptingRequests` toggles the main state.
-    // When we pause, we set acceptingRequests=false, requestsPausedUntil=TIMESTAMP.
-    // So:
-    // Is OFF if: acceptingRequests == false AND (requestsPausedUntil == null OR requestsPausedUntil > now)
-    // Is ON if: acceptingRequests == true OR (requestsPausedUntil != null && requestsPausedUntil <= now)
-
-    // Let's refine the specific logic I updated in firebase.ts:
-    // When pausing: acceptingRequests=false, requestsPausedUntil=futureTime.
-    // So if pausedUntil > now, it implies "Paused".
-
-    const isRequestsPaused = !event?.acceptingRequests; // Base status
+    const isRequestsPaused = !event?.acceptingRequests;
     const isPausedTemporarily = event?.requestsPausedUntil && event.requestsPausedUntil > Date.now();
-
-    // Effective Status:
-    // True (Accepting) if:
-    // 1. acceptingRequests is true
-    // OR
-    // 2. acceptingRequests is false BUT pausedUntil has passed (auto-resume)
     const effectiveAcceptingRequests = event?.acceptingRequests || (!!event?.requestsPausedUntil && Date.now() > event.requestsPausedUntil);
 
     useEffect(() => {
+        // ... (subscribe logic same) ...
         if (!id) return;
         const unsubscribe = subscribeToQueue(id, (songs) => {
             const sorted = [...songs].sort((a, b) => {
-                // Tier 1: Played (Bottom)
+                // ... same sort ...
                 if (a.status === 'PLAYED' && b.status !== 'PLAYED') return 1;
                 if (a.status !== 'PLAYED' && b.status === 'PLAYED') return -1;
-
-                // Tier 2: Rejected (Below Active, Above Played)
                 if (a.status === 'REJECTED' && b.status !== 'REJECTED') return 1;
                 if (a.status !== 'REJECTED' && b.status === 'REJECTED') return -1;
-
-                // Tier 3: Active (Approved/Pending) - Sort by Votes, then Time
                 return b.votes - a.votes || a.timestamp - b.timestamp;
             });
             setQueue(sorted);
@@ -68,17 +49,12 @@ export const EventQueuePage: React.FC = () => {
     }, [id]);
 
     const handleVote = async (songId: string, direction: 'up' | 'down') => {
+        // ... same vote logic ...
         if (!user) return;
         try {
             await voteSong(songId, direction, user.id);
         } catch (error: any) {
-            // "Glitchy" alert fix: Handle string errors properly
             const msg = typeof error === 'string' ? error : (error.message || "Voting failed");
-            // Optional: You could use a toast here instead of alert, but ensuring the message is valid strings fixes the glitch.
-            console.warn("Vote error:", msg);
-            // Only alert if it's a real blocking error, otherwise ignore?
-            // "Daily Quota Exceeded" or "Voting Closed" should be alerted.
-            // "Song does not exist" -> maybe refresh?
             if (msg.includes("Quota") || msg.includes("Closed") || msg.includes("exist")) {
                 alert(msg);
             }
@@ -86,6 +62,7 @@ export const EventQueuePage: React.FC = () => {
     };
 
     const handleDJAction = async (songId: string, action: 'APPROVE' | 'REJECT' | 'PLAYED') => {
+        // ... same logic ...
         const status = action === 'APPROVE' ? SongStatus.APPROVED
             : action === 'REJECT' ? SongStatus.REJECTED
                 : SongStatus.PLAYED;
@@ -99,24 +76,32 @@ export const EventQueuePage: React.FC = () => {
     };
 
     const handleToggleRequests = () => {
+        // ... existing ...
         if (!event || !isDj) return;
         if (effectiveAcceptingRequests) {
-            // Turning OFF
             setShowPauseModal(true);
         } else {
-            // Turning ON
             toggleEventRequests(event.id, false, null);
         }
     };
 
     const handlePauseDuration = (minutes: number | null) => {
+        // ... existing ...
         if (!event) return;
         const pausedUntil = minutes ? Date.now() + (minutes * 60 * 1000) : null;
-        toggleEventRequests(event.id, true, pausedUntil); // true = currentStatus (meaning it WAS on), so it toggles to off
+        toggleEventRequests(event.id, true, pausedUntil);
         setShowPauseModal(false);
     };
 
+    // Navigate to Crate Mode
+    const toggleCrateMode = async () => {
+        if (!window.electronAPI) return;
+        await window.electronAPI.toggleFloating(true);
+        navigate(`/crate/${event?.id}`);
+    };
+
     if (!id) return <div>Invalid Event ID</div>;
+    // ... rest of component ...
 
     return (
         <div className="space-y-4 pt-4 px-4 h-screen flex flex-col bg-slate-950 pb-20 relative">
@@ -129,13 +114,37 @@ export const EventQueuePage: React.FC = () => {
                         <Music className="text-purple-400" /> Queue
                     </h2>
                     {isDj && (
-                        <button
-                            onClick={handleToggleRequests}
-                            className={`ml-2 transition-colors ${effectiveAcceptingRequests ? 'text-green-400' : 'text-slate-500'}`}
-                            title={effectiveAcceptingRequests ? "Turn requests off" : "Turn requests on"}
-                        >
-                            {effectiveAcceptingRequests ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
-                        </button>
+                        <div className="flex items-center gap-1">
+                            <button
+                                onClick={handleToggleRequests}
+                                className={`ml-2 transition-colors ${effectiveAcceptingRequests ? 'text-green-400' : 'text-slate-500'}`}
+                                title={effectiveAcceptingRequests ? "Turn requests off" : "Turn requests on"}
+                            >
+                                {effectiveAcceptingRequests ? <ToggleRight size={32} /> : <ToggleLeft size={32} />}
+                            </button>
+                            {/* EVENT EDIT SHORTCUT */}
+                            {user?.id === event?.ownerId && (
+                                <button
+                                    onClick={() => { if (event) { setEditingEvent(event); setShowEventModal(true); } }}
+                                    className="p-2 text-slate-500 hover:text-white hover:bg-slate-800 rounded-full transition"
+                                    title="Edit Event"
+                                >
+                                    <Clock size={0} className="hidden" />
+                                    <Edit2 size={18} />
+                                </button>
+                            )}
+
+                            {/* CRATE MODE TOGGLE (Electron Only) - PROMINENT BUTTON */}
+                            {window.electronAPI && (
+                                <button
+                                    onClick={toggleCrateMode}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/40 border border-blue-500/30 rounded-full text-blue-200 hover:text-white transition-all text-xs font-bold"
+                                    title="Open Crate (Float Mode)"
+                                >
+                                    <Layers size={14} /> Open Crate
+                                </button>
+                            )}
+                        </div>
                     )}
                 </div>
                 <div className="text-xs text-slate-500 font-medium px-2 py-1 bg-slate-800 rounded">
@@ -252,6 +261,15 @@ export const EventQueuePage: React.FC = () => {
                         </button>
                     </div>
                 </div>
+            )}
+            {showEventModal && (
+                <EventModal
+                    editingEvent={editingEvent}
+                    setEditingEvent={setEditingEvent}
+                    onClose={() => setShowEventModal(false)}
+                    currentUserId={user?.id}
+                    series={[]}
+                />
             )}
         </div>
     );

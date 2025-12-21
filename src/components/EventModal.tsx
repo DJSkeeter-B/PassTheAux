@@ -85,6 +85,55 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
         return () => clearTimeout(timer);
     }, [djSearchTerm, editingEvent.djIds]);
 
+    // Initial DJ Hydration (Fix for "Letters vs Names")
+    useEffect(() => {
+        const hydrateDjs = async () => {
+            if (editingEvent.djIds && editingEvent.djIds.length > 0) {
+                // If we already have objects for all, skip
+                const missingIds = editingEvent.djIds.filter(id => !selectedDjObjects.some(obj => obj.id === id));
+
+                if (missingIds.length > 0) {
+                    // We need to fetch these users. 
+                    // Optimization: We can reuse 'searchUsers' or make a 'getUsersByIds' helper.
+                    // For now, let's just search by ID? No, searchUsers searches name/username.
+                    // Let's implement a quick fetch loop or assume we can rely on 'searchDjs' if we knew names, but we don't.
+                    // We need a way to get user profiles by ID. 
+                    // Let's us 'subscribeToUserProfile' for each or just accept we might need a new service method `getUsersByIds`.
+                    // For this quick fix, I'll assume we can use a temporary helper here or modify `searchUsers`? 
+                    // Actually, I can just use `subscribeToUserProfile` once for each to get data.
+
+                    const newObjects: UserProfile[] = [];
+                    for (const id of missingIds) {
+                        // We'll use a one-time promise wrapper around subscribeToUserProfile or just fetch doc directly?
+                        // Since we are in a component, let's use the service but we need a Promise-based 'getUser'.
+                        // 'firebase.ts' has `subscribeToUserProfile`. Let's mock a get or use internal logic? 
+                        // Actually `getDoc(doc(db, "users", uid))` is standard. 
+                        // BUT I should not import `getDoc` etc here if I want to keep service abstraction layer clean.
+                        // Let's check `searchUsers`.
+                        // I will add a simple `fetchUser` logic here using `subscribeToUserProfile` which is available.
+
+                        await new Promise<void>((resolve) => {
+                            const unsub = subscribeToUserProfile(id, (profile) => {
+                                if (profile) newObjects.push(profile);
+                                unsub();
+                                resolve();
+                            });
+                        });
+                    }
+
+                    if (newObjects.length > 0) {
+                        setSelectedDjObjects(prev => {
+                            // Merge and unique
+                            const combined = [...prev, ...newObjects];
+                            return Array.from(new Map(combined.map(item => [item.id, item])).values());
+                        });
+                    }
+                }
+            }
+        };
+        hydrateDjs();
+    }, [editingEvent.djIds]);
+
     // Debounced Venue Search
     useEffect(() => {
         const timer = setTimeout(async () => {
@@ -283,6 +332,21 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
 
     const handleSaveEvent = async () => {
         if (!currentUserId && !editingEvent.ownerId) return;
+
+        // Validation
+        if (!editingEvent.title?.trim()) {
+            alert("Please enter an Event Title.");
+            return;
+        }
+        if (!editingEvent.date) {
+            alert("Please select a Date.");
+            return;
+        }
+        if (!editingEvent.venueName?.trim()) {
+            alert("Please select or enter a Venue.");
+            return;
+        }
+
         try {
             const cleanData: any = {
                 ...editingEvent,
@@ -435,7 +499,7 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                     <div className="space-y-4">
                         {/* Title */}
                         <div>
-                            <label className="text-xs text-slate-400 block mb-1">Event Title</label>
+                            <label className="text-xs text-slate-400 block mb-1">Event Title <span className="text-red-500">*</span></label>
                             <input
                                 className="w-full bg-slate-950 p-3 rounded border border-slate-700 text-white"
                                 value={editingEvent.title || ''}
@@ -450,7 +514,7 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                         {/* Date & Time Section */}
                         <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-700 space-y-3">
                             <div>
-                                <label className="text-xs text-slate-400 block mb-1">Date</label>
+                                <label className="text-xs text-slate-400 block mb-1">Date <span className="text-red-500">*</span></label>
                                 <input
                                     type="date"
                                     className="w-full bg-slate-900 p-2 rounded border border-slate-600 text-white focus:border-purple-500 outline-none"
@@ -493,7 +557,7 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
 
                         {/* Venue Selection */}
                         <div>
-                            <label className="text-xs text-slate-400 block mb-1">Venue / Location</label>
+                            <label className="text-xs text-slate-400 block mb-1">Venue / Location <span className="text-red-500">*</span></label>
                             {editingEvent.venueName ? (
                                 <div className="space-y-2">
                                     <div className="bg-slate-950 p-3 rounded border border-green-900/50 flex items-center justify-between">

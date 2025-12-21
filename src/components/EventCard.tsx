@@ -1,7 +1,7 @@
 console.log("DEBUG: EventCard MODULE EVALUATING");
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Headphones, User, Clock, ArrowRight, CornerDownRight, LogOut, Music } from 'lucide-react';
+import { MapPin, Headphones, User, Clock, ArrowRight, CornerDownRight, LogOut, Music, Edit2 } from 'lucide-react';
 import { Event } from '../types';
 import { checkInUser, checkOutUser } from '../services/firebase';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -12,9 +12,10 @@ import { useData } from '../contexts/DataContext';
 interface EventCardProps {
     event: Event;
     userCheckedInEventId: string | null | undefined;
+    onEdit?: (event: Event) => void;
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventId }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventId, onEdit }) => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { events } = useData();
@@ -144,7 +145,19 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
                 </div>
 
                 {/* Quick Action Button - Absolute Right Bottom */}
-                <div className="absolute top-1/2 -translate-y-1/2 right-3">
+                <div className="absolute top-1/2 -translate-y-1/2 right-3 flex flex-col gap-2">
+                    {/* EDIT Button (Only if Owner and onEdit provided) */}
+                    {onEdit && user?.id === event.ownerId && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); onEdit(event); }}
+                            className="p-3 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700 hover:border-slate-500"
+                            title="Edit Event"
+                        >
+                            <Edit2 size={18} />
+                        </button>
+                    )}
+
+                    {/* CHECK IN / OUT Button */}
                     <button
                         onClick={handleQuickAction}
                         className={`p-3 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center

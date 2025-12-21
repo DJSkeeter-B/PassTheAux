@@ -769,11 +769,15 @@ export const uploadEventImage = async (file: File) => {
   try {
     // Only compress if image
     if (file.type.startsWith('image/')) {
-      const compressed = await compressImage(file);
-      fileToUpload = compressed;
+      try {
+        const compressed = await compressImage(file);
+        fileToUpload = compressed;
+      } catch (compressionError) {
+        console.warn("Image compression failed, proceeding with original file.", compressionError);
+      }
     }
   } catch (e) {
-    console.warn("Image compression failed, uploading original.", e);
+    console.warn("Image processing error, proceeding with original.", e);
   }
 
   try {
@@ -947,8 +951,22 @@ export const addSongRequest = async (song: Omit<Song, 'id'>) => {
       }
     } else {
       // PENDING, APPROVED, REJECTED
-      // If Rejected, user wants it to be blocked ("Turning off this search and request limitation..." implies limit exists)
-      // If Pending/Approved, definitely block.
+      // Check if user already voted (Implicit Upvote logic)
+      const userId = song.requesterId;
+      if (userId) {
+        const upvoted = existing.upvotedUserIds || [];
+        const downvoted = existing.downvotedUserIds || [];
+
+        if (upvoted.includes(userId) || downvoted.includes(userId)) {
+          throw new Error("This song is already in the queue and you have voted on it.");
+        } else {
+          // Auto-Upvote the existing song since they wanted it too
+          await voteSong(existing.id, 'up', userId);
+          // Throwing error with success message so the UI Alert shows it (quickest UX win without refactoring UI)
+          throw new Error("Song already in queue. We added your vote!");
+        }
+      }
+
       throw new Error("This song is already in the queue.");
     }
   }

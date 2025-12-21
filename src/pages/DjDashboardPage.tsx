@@ -73,10 +73,7 @@ export const DjDashboardPage: React.FC = () => {
     if (isFloating) {
         return (
             <DjCrateWidget
-                queue={queue}
-                onApprove={(id) => handleDJAction(id, 'APPROVE')}
-                onReject={(id) => handleDJAction(id, 'REJECT')}
-                onPlay={(id) => handleDJAction(id, 'PLAYED')}
+                eventId={id!}
                 onCloseWidget={toggleFloatingMode} // Toggling off returns to main window
             />
         );

@@ -31,7 +31,7 @@ export const SongCard: React.FC<SongCardProps> = ({
   const isUpvoted = currentUserId && song.upvotedUserIds?.includes(currentUserId);
   const isDownvoted = currentUserId && song.downvotedUserIds?.includes(currentUserId);
   const isOwner = currentUserId && song.requesterId === currentUserId;
-  const canVote = !isOwner;
+  const canVote = !isOwner && !!currentUserId;
 
   const isRejected = song.status === SongStatus.REJECTED;
 

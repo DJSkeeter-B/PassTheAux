@@ -6,11 +6,20 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { EventCard } from '../components/EventCard';
 import { Event } from '../types';
+import { EventModal } from '../components/EventModal';
 
 export const FeedPage: React.FC = () => {
     const { user } = useAuth();
     const { events, venues } = useData();
     const navigate = useNavigate();
+
+    const [showEventModal, setShowEventModal] = useState(false);
+    const [editingEvent, setEditingEvent] = useState<Partial<Event>>({});
+
+    const handleEditEvent = (evt: Event) => {
+        setEditingEvent(evt);
+        setShowEventModal(true);
+    };
 
     const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 
@@ -109,7 +118,12 @@ export const FeedPage: React.FC = () => {
                 ) : (
                     <div className="grid gap-4">
                         {tonightEvents.map(evt => (
-                            <EventCard key={evt.id} event={evt} userCheckedInEventId={user?.checkedInEventId} />
+                            <EventCard
+                                key={evt.id}
+                                event={evt}
+                                userCheckedInEventId={user?.checkedInEventId}
+                                onEdit={handleEditEvent}
+                            />
                         ))}
                     </div>
                 )}
@@ -127,7 +141,12 @@ export const FeedPage: React.FC = () => {
                                 </h3>
                                 <div className="grid gap-4">
                                     {evts.map(evt => (
-                                        <EventCard key={evt.id} event={evt} userCheckedInEventId={user?.checkedInEventId} />
+                                        <EventCard
+                                            key={evt.id}
+                                            event={evt}
+                                            userCheckedInEventId={user?.checkedInEventId}
+                                            onEdit={handleEditEvent}
+                                        />
                                     ))}
                                 </div>
                             </div>
@@ -167,6 +186,15 @@ export const FeedPage: React.FC = () => {
                         </>
                     )}
                 </div>
+            )}
+            {showEventModal && (
+                <EventModal
+                    editingEvent={editingEvent}
+                    setEditingEvent={setEditingEvent}
+                    onClose={() => setShowEventModal(false)}
+                    currentUserId={user?.id}
+                    series={[]}
+                />
             )}
         </div>
     );

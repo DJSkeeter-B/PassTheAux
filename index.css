@@ -41,6 +41,54 @@
     animation-name: scroll-text;
     animation-timing-function: linear;
     animation-iteration-count: infinite;
-    animation-iteration-count: infinite;
-    /* Scroll back and forth removed for sync look */
+}
+
+/* Electron Draggable Region */
+.draggable {
+    -webkit-app-region: drag;
+}
+
+button,
+a,
+input,
+[role="button"] {
+    -webkit-app-region: no-drag;
+}
+
+/* Horizontal Scrollbar for Crate */
+.custom-scrollbar::-webkit-scrollbar {
+    height: 6px;
+    width: 4px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+}
+
+/* Widget Mode Overrides - Fixes transparency/background issues */
+body.floating-widget-mode {
+    background: transparent !important;
+}
+
+/* Hide Layout Elements when in Widget Mode */
+body.floating-widget-mode #root>div>div.fixed {
+    display: none !important;
+    /* Hides GlobalHeader and BottomNav */
+}
+
+/* Reset Layout Container when in Widget Mode */
+body.floating-widget-mode #root>div {
+    background: transparent !important;
+    box-shadow: none !important;
+    min-height: 0 !important;
+    max-width: none !important;
+    /* Remove max-w-md constraint */
+    padding: 0 !important;
+    /* Remove top/bottom padding */
+    border: none !important;
 }
