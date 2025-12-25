@@ -36,11 +36,19 @@ export const EventQueuePage: React.FC = () => {
         if (!id) return;
         const unsubscribe = subscribeToQueue(id, (songs) => {
             const sorted = [...songs].sort((a, b) => {
-                // ... same sort ...
+                // Priority 1: Approved Songs (Top)
+                if (a.status === 'APPROVED' && b.status !== 'APPROVED') return -1;
+                if (a.status !== 'APPROVED' && b.status === 'APPROVED') return 1;
+
+                // Priority 2: Played (Bottom)
                 if (a.status === 'PLAYED' && b.status !== 'PLAYED') return 1;
                 if (a.status !== 'PLAYED' && b.status === 'PLAYED') return -1;
+
+                // Priority 3: Rejected (Bottom)
                 if (a.status === 'REJECTED' && b.status !== 'REJECTED') return 1;
                 if (a.status !== 'REJECTED' && b.status === 'REJECTED') return -1;
+
+                // Priority 4: Votes & Time
                 return b.votes - a.votes || a.timestamp - b.timestamp;
             });
             setQueue(sorted);

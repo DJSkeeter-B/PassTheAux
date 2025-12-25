@@ -372,7 +372,9 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                             console.log("Permission denied, attempting Admin Override...");
                             await updateEventAsAdmin(editingEvent.id, cleanData);
                         } catch (adminError: any) {
-                            throw adminError; // Throw original or new error
+                            console.error("Admin Update Failed:", adminError);
+                            alert(`Admin Update Failed: ${adminError.message}`);
+                            throw adminError;
                         }
                     } else {
                         throw e;
@@ -721,98 +723,13 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                             )}
                         </div>
 
-                        {/* Search Integrations */}
-                        <div className="bg-slate-950/50 p-3 rounded-lg border border-slate-700 space-y-3">
-                            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1">Search Sources</h4>
-
-                            {/* Spotify Toggle */}
-                            <div className={`flex items-center justify-between ${!editingEvent.allowLexiconSearch ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                                <div className="flex items-center gap-2">
-                                    <div className="p-1.5 bg-[#1DB954]/20 text-[#1DB954] rounded">
-                                        <Music size={14} />
-                                    </div>
-                                    <div>
-                                        <div className="text-sm font-bold text-white">Spotify Library</div>
-                                        <div className="text-[10px] text-slate-500">Allow guests to search Spotify</div>
-                                    </div>
-                                </div>
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        className="sr-only peer"
-                                        disabled={!editingEvent.allowLexiconSearch}
-                                        checked={editingEvent.allowSpotifySearch !== false} // Default True
-                                        onChange={e => {
-                                            if (!editingEvent.allowLexiconSearch) return; // double check
-                                            setEditingEvent({ ...editingEvent, allowSpotifySearch: e.target.checked });
-                                            markDirty('allowSpotifySearch');
-                                        }}
-                                    />
-                                    <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#1DB954]"></div>
-                                </label>
-                            </div>
-
-                            {/* Lexicon Toggle (Conditional) */}
-                            {/* We need the UserProfile here to check lexiconConnectionEnabled. 
-                                Since we don't have the full User object passed in props (only currentUserId), 
-                                we might need to fetch it or rely on a Context. 
-                                BUT, for now, let's assume 'currentUserId' loaded the profile in the parent or context.
-                                Let's check 'useAuth' context.
-                            */}
-                            {(() => {
-                                // Need to access Auth Context inside component
-                                // eslint-disable-next-line react-hooks/rules-of-hooks
-                                const { user } = useAuth(); // Actually useAuth might be better but verify imports
-                                // Note: EventModal imports useData, let's check if useData exposes user or if we need useAuth.
-                                // Quick fix: Add useAuth import.
-                                return (
-                                    user && user.lexiconConnectionEnabled && (
-                                        <div className="flex items-center justify-between pt-2 border-t border-slate-800">
-                                            <div className="flex items-center gap-2">
-                                                <div className="p-1.5 bg-orange-600/20 text-orange-400 rounded">
-                                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3" /><path d="M3 5V19A9 3 0 0 0 15 21.84" /><path d="M21 5V8" /><path d="M21 12L13 22L15 15L7 16L11 9L21 9" /></svg>
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm font-bold text-white">Local Library (Lexicon)</div>
-                                                    <div className="text-[10px] text-slate-500">Search your synced tracks</div>
-                                                </div>
-                                            </div>
-                                            <label className="relative inline-flex items-center cursor-pointer">
-                                                <input
-                                                    type="checkbox"
-                                                    className="sr-only peer"
-                                                    checked={editingEvent.allowLexiconSearch || false} // Default False
-                                                    onChange={e => {
-                                                        const newValue = e.target.checked;
-                                                        const updates: any = { allowLexiconSearch: newValue };
-
-                                                        // Ensure Spotify is enabled if Lexicon is turned off
-                                                        if (!newValue && editingEvent.allowSpotifySearch === false) {
-                                                            updates.allowSpotifySearch = true;
-                                                            markDirty('allowSpotifySearch');
-                                                        }
-
-                                                        setEditingEvent({ ...editingEvent, ...updates });
-                                                        markDirty('allowLexiconSearch');
-                                                    }}
-                                                />
-                                                <div className="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-orange-600"></div>
-                                            </label>
-                                        </div>
-                                    )
-                                );
-                            })()}
-                        </div>
-
-                        {/* Music Source Configuration (Requires Admin/DJ with Lexicon Setup) */}
-                        {editingEvent.ownerId && (
-                            <MusicSourceConfig
-                                editingEvent={editingEvent}
-                                setEditingEvent={setEditingEvent}
-                                markDirty={markDirty}
-                                ownerId={editingEvent.ownerId}
-                            />
-                        )}
+                        {/* Music Source Configuration */}
+                        <MusicSourceConfig
+                            editingEvent={editingEvent}
+                            setEditingEvent={setEditingEvent}
+                            markDirty={markDirty}
+                            ownerId={editingEvent.ownerId || currentUserId || ''}
+                        />
 
                         {/* Description */}
                         <div>

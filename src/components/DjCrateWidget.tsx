@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Play, ThumbsUp, ThumbsDown, X, Minimize2, Maximize2 } from 'lucide-react';
+import { Play, ThumbsUp, ThumbsDown, X, Minimize2, Maximize2, History, List, AlertCircle, Ban, Disc, Music } from 'lucide-react';
 import { Song, SongStatus } from '../types';
 import { subscribeToQueue, updateSongStatus } from '../services/firebase';
 
@@ -8,8 +8,11 @@ interface DjCrateWidgetProps {
     onCloseWidget: () => void;
 }
 
+type Tab = 'LIVE' | 'HISTORY' | 'DENIED';
+
 export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWidget }) => {
     const [viewState, setViewState] = useState<'COLLAPSED' | 'EXPANDED'>('COLLAPSED');
+    const [activeTab, setActiveTab] = useState<Tab>('LIVE');
     const [queue, setQueue] = useState<Song[]>([]);
     const minimizeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -17,18 +20,29 @@ export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWi
     useEffect(() => {
         if (!eventId) return;
         const unsubscribe = subscribeToQueue(eventId, (songs) => {
-            // Filter: Only show active songs (Pending/Approved)
-            const activeSongs = songs.filter(s => s.status !== 'PLAYED' && s.status !== 'REJECTED');
+            // Filter based on Active Tab
+            const relevantSongs = songs.filter(s => {
+                if (activeTab === 'LIVE') return s.status === 'PENDING' || s.status === 'APPROVED';
+                if (activeTab === 'HISTORY') return s.status === 'PLAYED';
+                if (activeTab === 'DENIED') return s.status === 'REJECTED';
+                return false;
+            });
 
-            const sorted = [...activeSongs].sort((a, b) => {
-                if (a.status === 'APPROVED' && b.status !== 'APPROVED') return -1;
-                if (a.status !== 'APPROVED' && b.status === 'APPROVED') return 1;
+            // Sorting Logic
+            const sorted = [...relevantSongs].sort((a, b) => {
+                // 1. Approved always at top (Only relevant for LIVE)
+                if (activeTab === 'LIVE') {
+                    if (a.status === 'APPROVED' && b.status !== 'APPROVED') return -1;
+                    if (a.status !== 'APPROVED' && b.status === 'APPROVED') return 1;
+                }
+                // 2. Sort by Votes DESC, then Time ASC
                 return b.votes - a.votes || a.timestamp - b.timestamp;
             });
+
             setQueue(sorted);
         });
         return () => unsubscribe();
-    }, [eventId]);
+    }, [eventId, activeTab]);
 
     // Handle Actions
     const handleAction = async (songId: string, action: 'APPROVE' | 'REJECT' | 'PLAYED') => {
@@ -38,17 +52,27 @@ export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWi
         await updateSongStatus(songId, status);
     };
 
-    // Window Resizing
+    // Window Resizing (Dynamic)
     useEffect(() => {
-        if (window.electronAPI) {
+        const api = (window as any).electronAPI;
+        if (api) {
             if (viewState === 'COLLAPSED') {
-                window.electronAPI.resizeWindow(140, 140);
+                api.resizeWindow(60, 60);
             } else {
-                // Horizontal Rectangle
-                window.electronAPI.resizeWindow(600, 280);
+                // Dynamic Height Calculation
+                const HEADER_HEIGHT = 100; // Header + Columns + Footer
+                const ROW_HEIGHT = 64;     // Approx height per song
+                const MIN_HEIGHT = 200;    // Minimum 
+                const MAX_ITEMS = 5;       // Cap auto-growth at 5 items (scroll after)
+
+                const itemCount = Math.max(1, queue.length); // At least show "Empty" message space
+                const desiredHeight = HEADER_HEIGHT + (Math.min(itemCount, MAX_ITEMS) * ROW_HEIGHT);
+
+                // Width 500px for readability
+                api.resizeWindow(500, desiredHeight);
             }
         }
-    }, [viewState]);
+    }, [viewState, queue.length]); // Re-calc when queue changes size
 
     // Auto-Minimize Logic
     const handleMouseEnter = () => {
@@ -62,11 +86,11 @@ export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWi
         if (viewState === 'EXPANDED') {
             minimizeTimeoutRef.current = setTimeout(() => {
                 setViewState('COLLAPSED');
-            }, 3000);
+            }, 4000); // 4-second inactivity timer
         }
     };
 
-    // Cleanup timeout on unmount or state change
+    // Cleanup timeout
     useEffect(() => {
         return () => {
             if (minimizeTimeoutRef.current) clearTimeout(minimizeTimeoutRef.current);
@@ -76,37 +100,37 @@ export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWi
     if (viewState === 'COLLAPSED') {
         return (
             <div
-                onClick={() => setViewState('EXPANDED')}
-                onMouseEnter={handleMouseEnter} // Just in case
-                className="w-full h-full flex items-center justify-center cursor-pointer group relative"
+                onMouseEnter={handleMouseEnter}
+                className="w-full h-full flex items-center justify-center relative overflow-hidden"
+                style={{ WebkitAppRegion: 'drag' } as any}
             >
-                {/* Milkcrate Icon Representation */}
-                <div className="w-24 h-24 bg-slate-900 border-4 border-slate-700 rounded-lg shadow-xl relative overflow-hidden transform group-hover:scale-105 transition-transform duration-200">
-                    {/* Crate Mesh Pattern */}
-                    <div className="absolute inset-0 grid grid-cols-4 grid-rows-4 gap-1 p-1 opacity-50">
-                        {Array.from({ length: 16 }).map((_, i) => (
-                            <div key={i} className="bg-slate-800 rounded-sm"></div>
-                        ))}
+                {/* Compact Icon Representation */}
+                <div className="w-full h-full bg-slate-900 rounded-xl shadow-xl border-2 border-slate-600 flex items-center justify-center relative overflow-hidden group-hover:border-blue-500 transition-colors">
+                    {/* Vinyl Record (Draggable Area) */}
+                    <div className="w-10 h-10 rounded-full bg-slate-800 border-4 border-slate-700 relative animate-slow-spin flex items-center justify-center">
+                        <div className="absolute inset-0 rounded-full border border-slate-600 opacity-50"></div>
+
+                        {/* Center Label (Clickable - No Drag) */}
+                        <div
+                            className="w-4 h-4 bg-red-500 rounded-full cursor-pointer hover:scale-110 transition-transform flex items-center justify-center z-50"
+                            style={{ WebkitAppRegion: 'no-drag' } as any}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setViewState('EXPANDED');
+                            }}
+                            title="Click to Expand"
+                        >
+                            <Minimize2 size={8} className="text-white transform rotate-45" />
+                        </div>
                     </div>
-                    {/* Records Inside */}
-                    <div className="absolute top-2 left-2 right-2 h-16 bg-gradient-to-r from-red-500 via-yellow-500 to-blue-500 rounded-t-sm transform -rotate-12 translate-y-2 opacity-80"></div>
                 </div>
 
-                {/* Badge for Request Count */}
-                {queue.length > 0 && (
-                    <div className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg animate-pulse">
+                {/* Badge for Request Count (Only Live) */}
+                {queue.length > 0 && activeTab === 'LIVE' && (
+                    <div className="absolute top-0 right-0 w-4 h-4 bg-red-500 rounded-full flex items-center justify-center text-white text-[10px] font-bold shadow border border-slate-900">
                         {queue.length}
                     </div>
                 )}
-
-                {/* Return to App Button (Collapsed View) */}
-                <button
-                    onClick={(e) => { e.stopPropagation(); onCloseWidget(); }}
-                    className="absolute -bottom-2 -right-2 p-1.5 bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 rounded-full shadow-lg border border-slate-600 transition-all opacity-0 group-hover:opacity-100 z-50"
-                    title="Close Crate & Return to App"
-                >
-                    <Maximize2 size={12} />
-                </button>
             </div>
         );
     }
@@ -115,85 +139,191 @@ export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWi
         <div
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
-            className="w-full h-full bg-slate-900/40 backdrop-blur-xl border border-slate-700/50 rounded-xl overflow-hidden shadow-2xl flex flex-col"
+            className="w-full h-full bg-slate-900/95 backdrop-blur-xl border border-slate-700/50 rounded-xl overflow-hidden shadow-2xl flex flex-col font-sans"
         >
-            {/* Crate Header (Horizontal) */}
-            <div className="h-8 px-3 bg-slate-900/60 flex justify-between items-center border-b border-slate-700/50 backdrop-blur-md draggable">
-                <span className="font-bold text-slate-200 text-xs flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                    LIVE REQUESTS ({queue.length})
-                </span>
-                <div className="flex gap-2">
+            {/* Header */}
+            <div className="h-10 px-3 bg-slate-900 flex justify-between items-center border-b border-slate-700 draggable shrink-0">
+                <div className="flex items-center gap-2" style={{ WebkitAppRegion: 'no-drag' } as any}>
+                    {/* TABS */}
+                    <div className="flex bg-slate-800 p-0.5 rounded-lg">
+                        <button
+                            onClick={() => setActiveTab('LIVE')}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${activeTab === 'LIVE' ? 'bg-slate-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                            LIVE
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('HISTORY')}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${activeTab === 'HISTORY' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                            HISTORY
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('DENIED')}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold transition-all ${activeTab === 'DENIED' ? 'bg-red-900/50 text-red-200 shadow' : 'text-slate-400 hover:text-slate-200'}`}
+                        >
+                            DENIED
+                        </button>
+                    </div>
+                </div>
+
+                <div className="flex gap-1 items-center">
                     <button
                         onClick={() => setViewState('COLLAPSED')}
-                        className="p-1 px-2 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors text-xs font-bold flex items-center gap-1"
-                        title="Minimize to Crate"
+                        className="p-1.5 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition-colors"
+                        title="Minimize"
                     >
-                        <Minimize2 size={10} /> Minimize
+                        <Minimize2 size={12} />
                     </button>
                     <button
                         onClick={onCloseWidget}
-                        className="p-1 px-2 bg-blue-600/30 hover:bg-blue-600/50 rounded text-blue-200 hover:text-white transition-colors text-xs font-bold flex items-center gap-1 border border-blue-500/30"
-                        title="Return to Full App"
+                        className="p-1.5 bg-slate-800 hover:bg-red-900/50 rounded text-slate-400 hover:text-red-400 transition-colors"
+                        title="Close / Maximize App"
                     >
-                        <Maximize2 size={10} /> Full App
+                        <Maximize2 size={12} />
                     </button>
                 </div>
             </div>
 
-            {/* Horizontal Layout Content */}
-            <div className="flex-1 overflow-hidden flex">
-                {/* LIST SECTION (Takes up full width now) */}
-                <div className="flex-1 overflow-x-auto custom-scrollbar flex p-2 gap-2 snap-x">
-                    {queue.length === 0 ? (
-                        <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs">
-                            <p>Crate is empty</p>
-                        </div>
-                    ) : (
-                        queue.map(song => (
-                            <div key={song.id} className="min-w-[200px] w-[200px] h-full bg-slate-800/60 p-3 rounded-lg border border-slate-700/50 hover:bg-slate-800 transition-colors group flex flex-col snap-start relative">
-                                <div className="flex-1 min-h-0">
-                                    <h4 className="font-bold text-white text-sm line-clamp-2 leading-tight mb-1" title={song.title}>{song.title}</h4>
-                                    <p className="text-slate-400 text-xs truncate">{song.artist}</p>
+            {/* Column Headers */}
+            <div className="flex items-center px-4 py-2 bg-slate-800/50 text-[10px] font-bold text-slate-400 border-b border-slate-700/50 shrink-0 gap-2">
+                <div className="flex-1">SONG / ARTIST</div>
+                <div className="flex-1">SONG / ARTIST</div>
+                <div className="w-8 text-center" title="Tempo (BPM)">BPM</div>
+                <div className="w-8 text-center" title="Musical Key">KEY</div>
+                <div className="w-8 text-center" title="Energy Level (0-100)">NRG</div>
+                <div className="w-12 text-center">VOTES</div>
+                <div className="w-24 text-right">ACTIONS</div>
+            </div>
+
+            {/* Vertical List Content */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar flex flex-col p-2 gap-1">
+                {queue.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-sm p-4 text-center min-h-[100px]">
+                        <p className="mb-2 opacity-50">
+                            {activeTab === 'LIVE' ? "No active requests" : activeTab === 'HISTORY' ? "No history yet" : "No denied songs"}
+                        </p>
+                    </div>
+                ) : (
+                    queue.map(song => {
+                        const isApproved = song.status === 'APPROVED';
+                        const isRejected = song.status === 'REJECTED';
+                        const isNegative = song.votes < 0;
+
+                        // Dynamic Styles
+                        let rowClass = "bg-slate-800/40 hover:bg-slate-800/80 border-slate-700/30"; // Default
+                        if (isApproved) rowClass = "bg-green-900/20 hover:bg-green-900/30 border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.1)]";
+                        if (isRejected) rowClass = "bg-slate-900/20 opacity-75 grayscale border-transparent hover:opacity-100 hover:grayscale-0";
+                        if (isNegative && !isRejected && !isApproved) rowClass = "bg-red-900/10 hover:bg-red-900/20 border-red-500/30";
+
+                        return (
+                            <div
+                                key={song.id}
+                                className={`flex items-center p-3 rounded-lg border transition-all text-xs group relative shrink-0 ${rowClass}`}
+                            >
+                                {/* TEXT INFO */}
+                                <div className="flex-1 min-w-0 pr-3">
+                                    <div className="flex items-center gap-2 mb-0.5">
+                                        {/* SOURCE BADGE */}
+                                        <div title={song.source}>
+                                            {song.source === 'LEXICON' ? (
+                                                <Disc size={12} className="text-purple-400 shrink-0" />
+                                            ) : (
+                                                <Music size={12} className={song.source === 'SPOTIFY' ? "text-green-500 shrink-0" : "text-slate-500 shrink-0"} />
+                                            )}
+                                        </div>
+
+                                        <span className={`font-bold truncate text-sm ${isApproved ? 'text-green-400' : isRejected ? 'text-slate-400' : 'text-slate-200'}`}>
+                                            {song.title}
+                                        </span>
+                                        {isApproved && <span className="bg-green-500 text-slate-900 text-[9px] font-extrabold px-1 py-0.5 rounded">LIVE</span>}
+                                    </div>
+                                    <div className="flex items-center text-[11px] text-slate-400 gap-2">
+                                        <span className="truncate max-w-[150px]">{song.artist}</span>
+                                        <span className="w-1 h-1 rounded-full bg-slate-600"></span>
+                                        <span className="truncate opacity-75">by {song.requesterName || 'Guest'}</span>
+                                    </div>
                                 </div>
-                                <div className="flex items-center justify-between mt-2">
-                                    <div className="text-xs font-mono text-green-400 bg-green-900/30 px-1 rounded">
-                                        +{song.votes}
-                                    </div>
-                                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-2 right-2 bg-slate-800/90 rounded p-1 shadow-lg">
+
+
+
+                                {/* META */}
+                                <div className="w-8 text-center font-mono text-[10px] text-slate-400 border-r border-slate-700/50 h-4 flex items-center justify-center">
+                                    {song.bpm || '-'}
+                                </div>
+                                <div className="w-8 text-center font-mono text-[10px] text-slate-400 border-r border-slate-700/50 h-4 flex items-center justify-center">
+                                    {song.key || '-'}
+                                </div>
+                                <div className="w-8 text-center font-mono text-[10px] text-slate-400 h-4 flex items-center justify-center">
+                                    {song.energy ? (
+                                        <div className="w-full px-1">
+                                            <div className="h-1 bg-slate-700 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full rounded-full ${song.energy > 80 ? 'bg-red-500' : song.energy > 60 ? 'bg-orange-500' : 'bg-blue-500'}`}
+                                                    style={{ width: `${song.energy}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+                                    ) : '-'}
+                                </div>
+
+                                {/* VOTES */}
+                                <div className={`w-12 text-center font-bold text-sm ${song.votes > 0 ? 'text-green-400' : song.votes < 0 ? 'text-red-400' : 'text-slate-400'}`}>
+                                    {song.votes > 0 ? `+${song.votes}` : song.votes}
+                                </div>
+
+                                {/* ACTIONS (Right Aligned) */}
+                                <div className="w-24 flex items-center justify-end gap-1 pl-2">
+                                    {(activeTab === 'DENIED' || activeTab === 'HISTORY') ? (
+                                        // Restore / Re-queue
                                         <button
-                                            onClick={(e) => { e.stopPropagation(); handleAction(song.id, 'APPROVE'); }}
-                                            className="p-1.5 rounded bg-green-500/10 text-green-400 hover:bg-green-500 hover:text-white transition-colors"
-                                            title="Approve"
+                                            onClick={() => handleAction(song.id, 'APPROVE')}
+                                            className="p-1.5 rounded hover:bg-slate-700 text-slate-400 hover:text-green-400 transition-colors"
+                                            title="Restore / Approve"
                                         >
-                                            <ThumbsUp size={12} />
+                                            <ThumbsUp size={14} />
                                         </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleAction(song.id, 'REJECT'); }}
-                                            className="p-1.5 rounded bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white transition-colors"
-                                            title="Reject"
-                                        >
-                                            <ThumbsDown size={12} />
-                                        </button>
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); handleAction(song.id, 'PLAYED'); }}
-                                            className="p-1.5 rounded bg-blue-500/10 text-blue-400 hover:bg-blue-500 hover:text-white transition-colors"
-                                            title="Mark Played"
-                                        >
-                                            <Play size={12} />
-                                        </button>
-                                    </div>
+                                    ) : (
+                                        <>
+                                            {!isApproved && (
+                                                <button
+                                                    onClick={() => handleAction(song.id, 'APPROVE')}
+                                                    className="p-1.5 rounded hover:bg-green-500/20 text-slate-400 hover:text-green-400 transition-colors"
+                                                    title="Approve"
+                                                >
+                                                    <ThumbsUp size={14} />
+                                                </button>
+                                            )}
+
+                                            <button
+                                                onClick={() => handleAction(song.id, 'PLAYED')}
+                                                className={`p-1.5 rounded transition-colors ${isApproved
+                                                    ? 'bg-blue-500 hover:bg-blue-400 text-white shadow-lg shadow-blue-500/20'
+                                                    : 'hover:bg-blue-500/20 text-slate-400 hover:text-blue-400'
+                                                    }`}
+                                                title="Mark Played"
+                                            >
+                                                <Play size={14} fill={isApproved ? "currentColor" : "none"} />
+                                            </button>
+
+                                            <button
+                                                onClick={() => handleAction(song.id, 'REJECT')}
+                                                className="p-1.5 rounded hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-colors"
+                                                title="Reject"
+                                            >
+                                                <ThumbsDown size={14} />
+                                            </button>
+                                        </>
+                                    )}
                                 </div>
                             </div>
-                        ))
-                    )}
-                </div>
+                        );
+                    })
+                )}
             </div>
 
             {/* Footer Style */}
-            <div className="h-1 bg-gradient-to-r from-slate-700 via-slate-600 to-slate-700 opacity-50"></div>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-slate-600 to-transparent opacity-30 shrink-0"></div>
         </div>
     );
 };
-
-// Style injection removed - moved to index.css

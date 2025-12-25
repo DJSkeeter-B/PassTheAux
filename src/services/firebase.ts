@@ -60,6 +60,7 @@ export const updateUserProfile = async (userId: string, data: Partial<UserProfil
   if (data.avatarUrl !== undefined) updates.avatarUrl = data.avatarUrl;
   if (data.lexiconConnectionEnabled !== undefined) updates.lexiconConnectionEnabled = data.lexiconConnectionEnabled;
   if (data.allowRepeatRequests !== undefined) updates.allowRepeatRequests = data.allowRepeatRequests;
+  if (data.lexiconConfig !== undefined) updates.lexiconConfig = data.lexiconConfig;
 
   if (Object.keys(updates).length > 0) {
     await updateDoc(userRef, updates);

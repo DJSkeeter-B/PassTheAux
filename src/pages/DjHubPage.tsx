@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { Series, Event } from '../types';
 import { subscribeToSeries, subscribeToAllSeries } from '../services/firebase';
+import { getAllTracksSample } from '../services/lexiconService';
 import { groupEventsByDate } from '../utils/dateUtils';
 import { LogOut, Bell, Plus, Calendar, Edit2, Headphones, Layers, Minimize2, Maximize2, X, Music } from 'lucide-react';
 import { SeriesModal } from '../components/SeriesModal';
@@ -20,32 +21,32 @@ export const DjHubPage: React.FC = () => {
     // Electron Floating State
     const [isFloating, setIsFloating] = useState(false);
     const [isWidgetCollapsed, setIsWidgetCollapsed] = useState(true);
-    const isElectron = !!window.electronAPI;
+    const isElectron = !!(window as any).electronAPI;
 
     const toggleFloatingMode = async () => {
-        if (!window.electronAPI) return;
+        if (!(window as any).electronAPI) return;
         const newState = !isFloating;
         setIsFloating(newState);
 
         // Always reset to collapsed when enabling, restore size when disabling
         if (newState) {
             setIsWidgetCollapsed(true);
-            await window.electronAPI.toggleFloating(true);
-            await window.electronAPI.resizeWindow(60, 60); // Much smaller
+            await (window as any).electronAPI.toggleFloating(true);
+            await (window as any).electronAPI.resizeWindow(60, 60); // Much smaller
         } else {
-            await window.electronAPI.toggleFloating(false);
-            await window.electronAPI.resizeWindow(1000, 800);
+            await (window as any).electronAPI.toggleFloating(false);
+            await (window as any).electronAPI.resizeWindow(1000, 800);
         }
     };
 
     const toggleWidgetCollapse = async () => {
-        if (!window.electronAPI) return;
+        if (!(window as any).electronAPI) return;
         const newCollapsed = !isWidgetCollapsed;
         setIsWidgetCollapsed(newCollapsed);
         if (newCollapsed) {
-            await window.electronAPI.resizeWindow(60, 60);
+            await (window as any).electronAPI.resizeWindow(60, 60);
         } else {
-            await window.electronAPI.resizeWindow(400, 600);
+            await (window as any).electronAPI.resizeWindow(400, 600);
         }
     };
 
@@ -348,7 +349,127 @@ export const DjHubPage: React.FC = () => {
                     onClose={() => setShowSettings(false)}
                 />
             )}
+
+            {/* Lexicon Debug Viewer */}
+            {!isFloating && (
+                <LexiconDebugViewer />
+            )}
         </div>
     );
 
+};
+
+const LexiconDebugViewer: React.FC = () => {
+    const [expanded, setExpanded] = useState(false);
+    const [tracks, setTracks] = useState<any[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+
+    const loadLibrary = async () => {
+        setLoading(true);
+        setError('');
+        try {
+            console.log("Debug Viewer: Calling getAllTracksSample...");
+            const data = await getAllTracksSample();
+            console.log("Debug Viewer: Result", data?.length);
+            if (!data || data.length === 0) {
+                setError("Connection attempt finished but no tracks were returned. Check console for 'Lexicon host not found' or fetch errors.");
+            }
+            setTracks(data || []);
+        } catch (e: any) {
+            console.error("Debug Viewer Error:", e);
+            setError(`Error loading library: ${e.message}`);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    if (!expanded) {
+        return (
+            <div className="fixed bottom-4 right-4 z-50">
+                <button
+                    onClick={() => { setExpanded(true); loadLibrary(); }}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-400 text-xs px-3 py-2 rounded-lg shadow-lg border border-slate-700 flex items-center gap-2"
+                >
+                    <Layers size={14} /> Verify Lexicon
+                </button>
+            </div>
+        );
+    }
+
+    return (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col shadow-2xl">
+                <div className="p-4 border-b border-slate-800 flex justify-between items-center">
+                    <h3 className="font-bold text-white flex items-center gap-2">
+                        <Music className="text-purple-500" size={18} />
+                        Lexicon Library Viewer
+                    </h3>
+                    <button onClick={() => setExpanded(false)} className="text-slate-500 hover:text-white"><X size={20} /></button>
+                </div>
+
+                <div className="p-4 bg-slate-950/50 flex justify-between items-center shrink-0">
+                    <div className="text-sm text-slate-400">
+                        {loading ? "Connecting & Syncing..." : `${tracks.length} tracks loaded (sample)`}
+                    </div>
+                    <button
+                        onClick={loadLibrary}
+                        disabled={loading}
+                        className="text-xs bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white px-3 py-1.5 rounded"
+                    >
+                        {loading ? 'Syncing...' : 'Refresh Library'}
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
+                    {/* Error State */}
+                    {error && (
+                        <div className="p-4 text-center text-red-400 bg-red-900/10 rounded border border-red-900/30">
+                            {error}
+                            <p className="text-[10px] mt-2 text-slate-500">Ensure Lexicon is running and 'Enable Local API' is on.</p>
+                            <button
+                                onClick={() => window.location.reload()}
+                                className="mt-2 text-xs bg-red-900/50 hover:bg-red-900 text-white px-3 py-1 rounded"
+                            >
+                                Reload App
+                            </button>
+                        </div>
+                    )}
+
+                    {/* Track List */}
+                    {!loading && tracks.map((t, i) => (
+                        <div key={t.id || i} className="flex items-center gap-3 p-2 hover:bg-slate-800 rounded group border border-transparent hover:border-slate-700/50">
+                            {/* Art */}
+                            <div className="w-8 h-8 bg-slate-800 rounded flex items-center justify-center shrink-0 overflow-hidden">
+                                {t.artwork ? (
+                                    <img src={t.artwork} className="w-full h-full object-cover" onError={(e) => e.currentTarget.style.display = 'none'} />
+                                ) : (
+                                    <Music size={12} className="text-slate-600" />
+                                )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <div className="text-sm font-bold text-slate-200 truncate">{t.title}</div>
+                                <div className="text-xs text-slate-500 truncate">{t.artist}</div>
+                                {i === 0 && (
+                                    <div className="mt-1 p-2 bg-black/50 rounded text-[10px] font-mono text-green-400 overflow-x-auto">
+                                        RAW: {JSON.stringify(t).slice(0, 200)}...
+                                    </div>
+                                )}
+                            </div>
+                            <div className="ml-auto text-[10px] text-slate-600 font-mono">
+                                ID: {t.id}
+                            </div>
+                        </div>
+                    ))}
+
+                    {/* Empty State */}
+                    {!loading && !error && tracks.length === 0 && (
+                        <div className="p-10 text-center text-slate-500">
+                            Library is empty or connection failed silently.
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
 };

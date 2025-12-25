@@ -11,9 +11,19 @@ import { ConfirmationModal } from '../components/ConfirmationModal';
 
 import { EventModal } from '../components/EventModal';
 import { Edit2 } from 'lucide-react';
+import { isAdmin } from '../utils/adminUtils';
 
 const getDistanceFromLatLonInKm = (lat1: number, lon1: number, lat2: number, lon2: number) => {
-    // ... existing ...
+    const R = 6371; // Radius of the earth in km
+    const dLat = deg2rad(lat2 - lat1);
+    const dLon = deg2rad(lon2 - lon1);
+    const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    const d = R * c; // Distance in km
+    return d;
 };
 
 const deg2rad = (deg: number) => deg * (Math.PI / 180);
@@ -53,11 +63,61 @@ export const EventDetailsPage: React.FC = () => {
     });
 
     const handleCheckIn = async () => {
-        // ... existing logic ...
+        if (!user || !event) return;
+
+        // Admin Override: Skip Distance Check
+        if (isAdmin(user)) {
+            try {
+                await checkInUser(user.id, event.id);
+                // Force local update or rely on real-time listener
+                // window.location.reload(); // Not ideal, but 'user' comes from context which updates live?
+                // Actually UserContext listens to doc changes, so it should auto-update UI.
+            } catch (error) {
+                console.error("Check-in failed", error);
+                alert("Check-In Failed");
+            }
+            return;
+        }
+
+        // Standard Distance Check
+        if (!event.latitude || !event.longitude) {
+            alert("This event has no location set. Creating check-ins disabled.");
+            return;
+        }
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    const dist = getDistanceFromLatLonInKm(lat, lon, event.latitude!, event.longitude!);
+
+                    if (dist > 2.0) { // 2km Radius
+                        alert(`You are too far away checked in (${dist.toFixed(2)}km). Must be within 2km.`);
+                        return;
+                    }
+
+                    try {
+                        await checkInUser(user.id, event.id);
+                    } catch (error) {
+                        console.error(error);
+                        alert("Check-in Failed");
+                    }
+                },
+                (error) => {
+                    console.error("Geo Error", error);
+                    alert("Unable to get location. Please enable location services.");
+                }
+            );
+        } else {
+            alert("Geolocation is not supported by this browser.");
+        }
     };
 
     const handleCheckOut = async () => {
         // ... existing logic ...
+        if (!user) return;
+        await checkOutUser(user.id);
     };
 
     // Navigate to Crate Mode
@@ -179,20 +239,22 @@ export const EventDetailsPage: React.FC = () => {
                         )}
                     </div>
 
-                    {user?.checkedInEventId === event.id ? (
+                    {(user?.checkedInEventId === event.id || isAdmin(user)) ? (
                         <div className="space-y-3">
                             <button
                                 onClick={() => navigate(`/event/${event.id}/queue`)}
                                 className="w-full py-4 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition shadow-lg shadow-purple-900/20 text-lg"
                             >
-                                Go to Queue
+                                {isAdmin(user) && user?.checkedInEventId !== event.id ? "View Queue (Admin)" : "Go to Queue"}
                             </button>
-                            <button
-                                onClick={handleCheckOut}
-                                className="w-full py-3 bg-red-600/20 hover:bg-red-600/40 text-red-300 font-bold rounded-xl transition border border-red-500/30"
-                            >
-                                Check Out
-                            </button>
+                            {user?.checkedInEventId === event.id && (
+                                <button
+                                    onClick={handleCheckOut}
+                                    className="w-full py-3 bg-red-600/20 hover:bg-red-600/40 text-red-300 font-bold rounded-xl transition border border-red-500/30"
+                                >
+                                    Check Out
+                                </button>
+                            )}
                         </div>
                     ) : (
                         <>

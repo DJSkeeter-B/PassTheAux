@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Venue, Series, Event } from '../types';
-import { X, MapPin, Clock, AlignLeft, Calendar, Music, Pencil, Check, Save, Wand2 } from 'lucide-react';
-import { getSeriesByVenueId, getEventsByVenueName, updateVenue } from '../services/firebase';
+import { X, MapPin, Clock, AlignLeft, Calendar, Music, Pencil, Check, Save, Wand2, Trash2 } from 'lucide-react';
+import { getSeriesByVenueId, getEventsByVenueName, updateVenue, deleteVenue } from '../services/firebase';
 import { enrichVenueData } from '../services/geminiService';
 
 interface VenueDetailModalProps {
@@ -108,6 +108,26 @@ export const VenueDetailModal: React.FC<VenueDetailModalProps> = ({ venue, onClo
                         </div>
                     </div>
                     <div className="flex gap-2">
+                        {/* Delete Venue (Admin Only) - If Editable */}
+                        {isEditable && (
+                            <button
+                                onClick={async () => {
+                                    if (window.confirm("Are you sure you want to permanently delete this venue? This cannot be undone.")) {
+                                        try {
+                                            await deleteVenue(venue.id);
+                                            onClose();
+                                        } catch (e) {
+                                            console.error(e);
+                                            alert("Failed to delete venue.");
+                                        }
+                                    }
+                                }}
+                                className="p-2 bg-red-900/30 hover:bg-red-900/50 rounded-lg text-red-400 hover:text-white transition"
+                                title="Delete Venue"
+                            >
+                                <Trash2 size={18} />
+                            </button>
+                        )}
                         {/* Edit Toggle (Admin Only) */}
                         {(isEditable && !isEditing) && (
                             <button onClick={() => setIsEditing(true)} className="p-2 bg-slate-800 rounded-lg text-slate-400 hover:text-white transition" title="Edit Venue">

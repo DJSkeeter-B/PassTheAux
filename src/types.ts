@@ -95,7 +95,7 @@ export interface Event {
 
 export interface LexiconConfig {
   enabled: boolean;
-  host: string;
+  host?: string;
   apiKey?: string;
 }
 
@@ -127,6 +127,11 @@ export interface Song {
   timestamp: number;
   userVoted?: 'up' | 'down' | null;
   votedUserIds?: string[];
+  // Metadata for DJ Crate
+  bpm?: number;
+  key?: string;
+  energy?: number;
+  source?: 'LEXICON' | 'SPOTIFY' | 'GEMINI' | 'OTHER';
 }
 
 export interface SearchResult {
@@ -137,6 +142,10 @@ export interface SearchResult {
   coverUrl: string;
   previewUrl?: string | null;
   source?: 'LEXICON' | 'SPOTIFY' | 'GEMINI' | 'OTHER';
+  // Metadata for Crate
+  bpm?: number;
+  key?: string;
+  energy?: number;
 }
 
 export interface AppConfig {

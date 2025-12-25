@@ -31,3 +31,34 @@ export const searchSpotify = async (query: string, token: string, offset: number
     throw error;
   }
 };
+
+export const getAudioFeatures = async (trackId: string, token: string): Promise<{ bpm?: number, key?: string, energy?: number } | null> => {
+  if (!trackId || !token) return null;
+
+  try {
+    const response = await fetch(`https://api.spotify.com/v1/audio-features/${trackId}`, {
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) return null;
+
+    const data = await response.json();
+
+    // Convert Spotify Key integer to Pitch Class notation (or standard) if needed
+    // 0 = C, 1 = C#, 2 = D, etc.
+    const pitchClass = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const mode = data.mode === 1 ? 'Major' : 'Minor';
+    const keyStr = data.key >= 0 && data.key < 12 ? `${pitchClass[data.key]} ${mode}` : undefined;
+
+    return {
+      bpm: Math.round(data.tempo),
+      key: keyStr,
+      energy: Math.round(data.energy * 100) // Convert 0.0-1.0 to 0-100
+    };
+  } catch (error) {
+    console.error("Spotify Audio Features Error:", error);
+    return null;
+  }
+};

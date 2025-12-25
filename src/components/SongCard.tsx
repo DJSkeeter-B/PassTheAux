@@ -60,7 +60,7 @@ export const SongCard: React.FC<SongCardProps> = ({
       ${song.status === SongStatus.PLAYED ? 'bg-slate-800/50 border-slate-700 opacity-60' :
         'bg-slate-800 border-slate-700 hover:border-purple-500/50'}
       ${isPending && isDjMode ? 'border-yellow-500/50 bg-yellow-900/10' : ''}
-      ${isApproved && !isDjMode ? 'border-green-500/50 shadow-sm shadow-green-900/20' : ''}
+      ${isApproved ? 'border-green-500/50 shadow-sm shadow-green-900/20' : ''}
     `}>
       <div className="relative h-16 w-16 flex-shrink-0 rounded-lg overflow-hidden bg-slate-700 shadow-lg">
         <img src={song.coverUrl} alt={song.album} className="h-full w-full object-cover" loading="lazy" />

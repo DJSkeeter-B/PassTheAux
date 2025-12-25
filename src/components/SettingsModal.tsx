@@ -5,6 +5,7 @@ import { UserProfile } from '../types';
 import { verifyLexiconConnection } from '../services/lexiconService';
 import { X, Trash2, Database, Activity, Check, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { isSuperAdmin } from '../utils/adminUtils';
 
 interface SettingsModalProps {
     user: UserProfile;
@@ -66,65 +67,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ user, onClose }) =
 
                     {/* Developer/Test Mode - REMOVED */}
 
-                    {/* LEXICON LIBRARY INTEGRATION (Restricted) */}
-                    {['djskeeterb', 'brandon.skeeterb', 'brandon.skeeterb@gmail.com'].includes(user.username || user.email || '') && (
-                        <div className="border border-purple-500/30 bg-purple-900/10 rounded-xl p-4 space-y-4">
-                            <div className="flex items-center gap-2 mb-2">
-                                <Database size={16} className="text-purple-400" />
-                                <h4 className="text-xs font-bold text-purple-200 uppercase tracking-wider">Library Integration</h4>
-                            </div>
+// ... existing imports ...
 
-                            <p className="text-xs text-slate-400">
-                                Connect your local Lexicon library API to enable searching your own collection.
-                            </p>
+                    // ...
 
-                            <div className="space-y-3">
-                                <div>
-                                    <label className="text-xs font-bold text-slate-500 mb-1 block">Local API Host</label>
-                                    <input
-                                        className="w-full bg-slate-800 border border-slate-700 rounded p-2 text-xs text-white"
-                                        placeholder="http://localhost:3333"
-                                        defaultValue={user.lexiconConfig?.host || ''}
-                                        id="lexicon-host-input"
-                                    />
-                                </div>
-                                <button
-                                    onClick={async () => {
-                                        const hostInput = (document.getElementById('lexicon-host-input') as HTMLInputElement).value;
-                                        if (!hostInput) return;
 
-                                        const btn = document.getElementById('lexicon-connect-btn');
-                                        if (btn) btn.innerText = "Verifying...";
-
-                                        const success = await verifyLexiconConnection(hostInput);
-
-                                        if (success) {
-                                            await updateUserProfile(user.id, {
-                                                lexiconConfig: {
-                                                    enabled: true,
-                                                    host: hostInput
-                                                },
-                                                lexiconConnectionEnabled: true
-                                            });
-                                            alert("Connected successfully!");
-                                        } else {
-                                            alert("Connection failed. Please check if Lexicon Local API is running.");
-                                        }
-                                        if (btn) btn.innerText = "Connect & Verification";
-                                    }}
-                                    id="lexicon-connect-btn"
-                                    className="w-full py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded text-xs transition"
-                                >
-                                    {user.lexiconConfig?.enabled ? 'Update Connection' : 'Connect & Verify'}
-                                </button>
-                                {user.lexiconConfig?.enabled && (
-                                    <div className="flex items-center gap-2 text-green-400 text-xs font-bold justify-center bg-green-900/20 p-2 rounded border border-green-500/20">
-                                        <Check size={12} /> Connected to {user.lexiconConfig.host}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    )}
 
                     {/* Danger Zone - User Actions */}
                     <div className="border border-red-900/30 bg-red-900/10 rounded-xl p-4 space-y-4">

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Event, UserProfile } from '../types';
-import { subscribeToUserProfile } from '../services/firebase';
+import { subscribeToUserProfile, updateUserProfile } from '../services/firebase';
 import { getLexiconPlaylists } from '../services/lexiconService';
 import { Database, Music } from 'lucide-react';
 
@@ -17,23 +17,39 @@ export const MusicSourceConfig: React.FC<Props> = ({ editingEvent, setEditingEve
     const [loadingPlaylists, setLoadingPlaylists] = useState(false);
 
     useEffect(() => {
-        // Fetch owner profile to check for Lexicon config
         const unsub = subscribeToUserProfile(ownerId, (p) => {
             setOwnerProfile(p);
         });
         return () => unsub();
     }, [ownerId]);
 
-    const toggleSource = (source: 'SPOTIFY' | 'LEXICON') => {
+    const toggleSource = async (source: 'SPOTIFY' | 'LEXICON') => {
         const current = editingEvent.searchSources || ['SPOTIFY'];
         let next = [...current];
 
         if (next.includes(source)) {
-            // Don't allow removing the last source
+            // Disable
             if (next.length === 1) return alert("You must have at least one music source enabled.");
             next = next.filter(s => s !== source);
+
+            // If checking Lexicon OFF, optionally we could disable it in profile, but mostly we just care about this event.
+            // Actually, if they explicitly toggle it off here, they might just mean for this event. 
         } else {
+            // Enable
             next.push(source);
+
+            // If enabling Lexicon, ensure the USER PROFILE has it enabled so the service knows to look
+            if (source === 'LEXICON' && ownerProfile) {
+                if (!ownerProfile.lexiconConfig?.enabled) {
+                    await updateUserProfile(ownerId, {
+                        lexiconConfig: {
+                            enabled: true,
+                            // No host needed, auto-discovery handles it
+                            apiKey: ''
+                        }
+                    });
+                }
+            }
         }
 
         setEditingEvent(prev => ({ ...prev, searchSources: next }));
@@ -41,17 +57,18 @@ export const MusicSourceConfig: React.FC<Props> = ({ editingEvent, setEditingEve
     };
 
     const isLexiconEnabled = (editingEvent.searchSources || ['SPOTIFY']).includes('LEXICON');
-    const hasLexiconConfig = ownerProfile?.lexiconConfig?.enabled;
 
+    // Fetch playlists if meaningful connection exists
     useEffect(() => {
-        if (isLexiconEnabled && hasLexiconConfig && ownerProfile?.lexiconConfig?.host) {
+        if (isLexiconEnabled) {
             setLoadingPlaylists(true);
-            getLexiconPlaylists(ownerProfile.lexiconConfig.host).then(playlists => {
+            // getLexiconPlaylists now handles discovery internally
+            getLexiconPlaylists().then(playlists => {
                 setLexiconPlaylists(playlists);
                 setLoadingPlaylists(false);
             });
         }
-    }, [isLexiconEnabled, hasLexiconConfig, ownerProfile?.lexiconConfig?.host]);
+    }, [isLexiconEnabled]);
 
     const togglePlaylist = (pid: string) => {
         const current = editingEvent.lexiconPlaylistIds || [];
@@ -65,8 +82,6 @@ export const MusicSourceConfig: React.FC<Props> = ({ editingEvent, setEditingEve
         markDirty('lexiconPlaylistIds');
     };
 
-    if (!hasLexiconConfig) return null; // Hide entire section if user hasn't set up integration
-
     return (
         <div className="bg-slate-950 p-4 rounded-xl border border-slate-700 space-y-4">
             <div className="flex items-center gap-2 mb-2">
@@ -74,28 +89,37 @@ export const MusicSourceConfig: React.FC<Props> = ({ editingEvent, setEditingEve
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider">Music Sources</h4>
             </div>
 
-            <div className="flex gap-4">
-                <label className="flex items-center gap-2 cursor-pointer group">
-                    <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${(editingEvent.searchSources || ['SPOTIFY']).includes('SPOTIFY')
+            <div className="flex flex-col gap-4">
+                <div className="flex gap-4">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                        <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${(editingEvent.searchSources || ['SPOTIFY']).includes('SPOTIFY')
                             ? 'bg-green-600 border-green-500'
                             : 'bg-slate-900 border-slate-600 group-hover:border-green-500'
-                        }`}>
-                        {(editingEvent.searchSources || ['SPOTIFY']).includes('SPOTIFY') && <div className="w-2.5 h-2.5 bg-white rounded-sm" />}
-                    </div>
-                    <span className="text-sm text-white">Spotify</span>
-                </label>
-
-                <label className={`flex items-center gap-2 cursor-pointer group ${!hasLexiconConfig ? 'opacity-50 cursor-not-allowed' : ''}`}>
-                    <div
-                        onClick={() => hasLexiconConfig && toggleSource('LEXICON')}
-                        className={`w-5 h-5 rounded border flex items-center justify-center transition ${(editingEvent.searchSources || []).includes('LEXICON')
-                                ? 'bg-purple-600 border-purple-500'
-                                : 'bg-slate-900 border-slate-600 group-hover:border-purple-500'
                             }`}>
-                        {(editingEvent.searchSources || []).includes('LEXICON') && <div className="w-2.5 h-2.5 bg-white rounded-sm" />}
+                            {(editingEvent.searchSources || ['SPOTIFY']).includes('SPOTIFY') && <div className="w-2.5 h-2.5 bg-white rounded-sm" />}
+                        </div>
+                        <span className="text-sm text-white">Spotify</span>
+                    </label>
+
+                    <div className="flex flex-col">
+                        <label className="flex items-center gap-2 cursor-pointer group">
+                            <div
+                                onClick={() => toggleSource('LEXICON')}
+                                className={`w-5 h-5 rounded border flex items-center justify-center transition ${(editingEvent.searchSources || []).includes('LEXICON')
+                                    ? 'bg-purple-600 border-purple-500'
+                                    : 'bg-slate-900 border-slate-600 group-hover:border-purple-500'
+                                    }`}>
+                                {(editingEvent.searchSources || []).includes('LEXICON') && <div className="w-2.5 h-2.5 bg-white rounded-sm" />}
+                            </div>
+                            <span className="text-sm text-white">Lexicon Library</span>
+                        </label>
+                        {(editingEvent.searchSources || []).includes('LEXICON') && (
+                            <span className="text-[10px] text-slate-500 ml-7 animate-fade-in">
+                                Auto-Connects to your local Lexicon app
+                            </span>
+                        )}
                     </div>
-                    <span className="text-sm text-white">Lexicon Library</span>
-                </label>
+                </div>
             </div>
 
             {/* Playlist Filter */}
@@ -107,7 +131,7 @@ export const MusicSourceConfig: React.FC<Props> = ({ editingEvent, setEditingEve
                     </div>
 
                     {loadingPlaylists ? (
-                        <div className="text-xs text-slate-500 italic">Loading playlists...</div>
+                        <div className="text-xs text-slate-500 italic">Scanning for playlists...</div>
                     ) : lexiconPlaylists.length > 0 ? (
                         <div className="max-h-32 overflow-y-auto grid grid-cols-2 gap-2 bg-slate-900/50 p-2 rounded">
                             {lexiconPlaylists.map(p => (
@@ -115,8 +139,8 @@ export const MusicSourceConfig: React.FC<Props> = ({ editingEvent, setEditingEve
                                     key={p.id}
                                     onClick={() => togglePlaylist(p.id)}
                                     className={`text-xs p-2 rounded cursor-pointer border transition truncate ${(editingEvent.lexiconPlaylistIds || []).includes(p.id)
-                                            ? 'bg-purple-900/30 border-purple-500/50 text-purple-200'
-                                            : 'bg-slate-800 border-transparent hover:bg-slate-700 text-slate-300'
+                                        ? 'bg-purple-900/30 border-purple-500/50 text-purple-200'
+                                        : 'bg-slate-800 border-transparent hover:bg-slate-700 text-slate-300'
                                         }`}
                                 >
                                     {p.title}
@@ -124,7 +148,9 @@ export const MusicSourceConfig: React.FC<Props> = ({ editingEvent, setEditingEve
                             ))}
                         </div>
                     ) : (
-                        <div className="text-xs text-slate-500">No playlists found in your library.</div>
+                        <div className="text-xs text-slate-500">
+                            No playlists found. Ensure Lexicon is running.
+                        </div>
                     )}
                 </div>
             )}
