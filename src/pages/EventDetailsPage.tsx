@@ -5,7 +5,7 @@ import { ArrowLeft, MapPin, QrCode, BookOpen, Headphones, Layers } from 'lucide-
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { checkInUser, checkOutUser, getSeriesById } from '../services/firebase';
-import { Series } from '../types';
+import { Series, Event } from '../types';
 import { QRCodeModal } from '../components/QRCodeModal';
 import { ConfirmationModal } from '../components/ConfirmationModal';
 
@@ -80,37 +80,48 @@ export const EventDetailsPage: React.FC = () => {
         }
 
         // Standard Distance Check
-        if (!event.latitude || !event.longitude) {
-            alert("This event has no location set. Creating check-ins disabled.");
+        if (event.geoRestrictionEnabled) {
+            if (!event.latitude || !event.longitude) {
+                alert("This event has no location set. Creating check-ins disabled.");
+                return;
+            }
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        const lat = position.coords.latitude;
+                        const lon = position.coords.longitude;
+                        const dist = getDistanceFromLatLonInKm(lat, lon, event.latitude!, event.longitude!);
+
+                        if (dist > 2.0) { // 2km Radius
+                            alert(`You are too far away checked in (${dist.toFixed(2)}km). Must be within 2km.`);
+                            return;
+                        }
+
+                        try {
+                            await checkInUser(user.id, event.id);
+                        } catch (error) {
+                            console.error(error);
+                            alert("Check-in Failed");
+                        }
+                    },
+                    (error) => {
+                        console.error("Geo Error", error);
+                        alert("Unable to get location. Please enable location services.");
+                    }
+                );
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
             return;
         }
 
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    const dist = getDistanceFromLatLonInKm(lat, lon, event.latitude!, event.longitude!);
-
-                    if (dist > 2.0) { // 2km Radius
-                        alert(`You are too far away checked in (${dist.toFixed(2)}km). Must be within 2km.`);
-                        return;
-                    }
-
-                    try {
-                        await checkInUser(user.id, event.id);
-                    } catch (error) {
-                        console.error(error);
-                        alert("Check-in Failed");
-                    }
-                },
-                (error) => {
-                    console.error("Geo Error", error);
-                    alert("Unable to get location. Please enable location services.");
-                }
-            );
-        } else {
-            alert("Geolocation is not supported by this browser.");
+        // No Geo Restriction
+        try {
+            await checkInUser(user.id, event.id);
+        } catch (error) {
+            console.error("Check-in failed", error);
+            alert("Check-in Failed");
         }
     };
 

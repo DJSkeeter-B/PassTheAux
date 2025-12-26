@@ -358,7 +358,8 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                 date: editingEvent.date || new Date().toISOString().split('T')[0],
                 venueName: editingEvent.venueName || '',
                 description: editingEvent.description || '',
-                imageUrl: editingEvent.imageUrl || DEFAULT_EVENT_IMAGES[0]
+                imageUrl: editingEvent.imageUrl || DEFAULT_EVENT_IMAGES[0],
+                acceptingRequests: editingEvent.autoStartRequests === true ? true : (editingEvent.acceptingRequests ?? false)
             };
             delete cleanData.id;
 

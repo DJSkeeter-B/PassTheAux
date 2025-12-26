@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Event, UserProfile } from '../types';
 import { subscribeToUserProfile, updateUserProfile } from '../services/firebase';
 import { getLexiconPlaylists } from '../services/lexiconService';
-import { Database, Music } from 'lucide-react';
+import { Database, Music, Check } from 'lucide-react';
 
 interface Props {
     editingEvent: Partial<Event>;
@@ -90,7 +90,8 @@ export const MusicSourceConfig: React.FC<Props> = ({ editingEvent, setEditingEve
             </div>
 
             <div className="flex flex-col gap-4">
-                <div className="flex gap-4">
+                <div className="flex gap-4 flex-wrap">
+                    {/* Spotify Toggle */}
                     <label className="flex items-center gap-2 cursor-pointer group">
                         <div className={`w-5 h-5 rounded border flex items-center justify-center transition ${(editingEvent.searchSources || ['SPOTIFY']).includes('SPOTIFY')
                             ? 'bg-green-600 border-green-500'
@@ -101,6 +102,7 @@ export const MusicSourceConfig: React.FC<Props> = ({ editingEvent, setEditingEve
                         <span className="text-sm text-white">Spotify</span>
                     </label>
 
+                    {/* Lexicon Toggle */}
                     <div className="flex flex-col">
                         <label className="flex items-center gap-2 cursor-pointer group">
                             <div
@@ -119,6 +121,45 @@ export const MusicSourceConfig: React.FC<Props> = ({ editingEvent, setEditingEve
                             </span>
                         )}
                     </div>
+
+                    {/* GeoLocation Toggle */}
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                        <div
+                            onClick={() => {
+                                setEditingEvent(prev => ({ ...prev, geoRestrictionEnabled: !prev.geoRestrictionEnabled }));
+                                markDirty('geoRestrictionEnabled');
+                            }}
+                            className={`w-5 h-5 rounded border flex items-center justify-center transition ${editingEvent.geoRestrictionEnabled
+                                ? 'bg-blue-600 border-blue-500'
+                                : 'bg-slate-900 border-slate-600 group-hover:border-blue-500'
+                                }`}>
+                            {editingEvent.geoRestrictionEnabled && <div className="w-2.5 h-2.5 bg-white rounded-sm" />}
+                        </div>
+                        <span className="text-sm text-white">Restrict to 2km (Geo)</span>
+                    </label>
+                </div>
+
+                {/* Auto-Start Requests Checkbox */}
+                <div className="pt-2 border-t border-slate-800">
+                    <label className="flex items-center gap-2 cursor-pointer group">
+                        <div
+                            onClick={() => {
+                                setEditingEvent(prev => ({ ...prev, autoStartRequests: !prev.autoStartRequests }));
+                                markDirty('autoStartRequests');
+                            }}
+                            className={`w-4 h-4 rounded border flex items-center justify-center transition ${editingEvent.autoStartRequests
+                                ? 'bg-slate-700 border-slate-500'
+                                : 'bg-slate-900 border-slate-700 group-hover:border-slate-500'
+                                }`}>
+                            {editingEvent.autoStartRequests && <Check size={10} className="text-white" />}
+                        </div>
+                        <div>
+                            <span className="text-xs font-bold text-slate-300">Enable Requests Automatically</span>
+                            <p className="text-[10px] text-slate-500">
+                                If checked, requests will be enabled when the event starts (or is created).
+                            </p>
+                        </div>
+                    </label>
                 </div>
             </div>
 

@@ -91,6 +91,8 @@ export interface Event {
   allowLexiconSearch?: boolean; // Defaults to false
   allowSpotifySearch?: boolean; // Defaults to true
   hasAdminViewed?: boolean; // Notification Tracking
+  geoRestrictionEnabled?: boolean; // If true, requires user to be within 2km
+  autoStartRequests?: boolean; // If true, requests open automatically/stay open
 }
 
 export interface LexiconConfig {
