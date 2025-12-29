@@ -2,7 +2,7 @@
 import {
   collection, doc, addDoc, updateDoc, onSnapshot,
   query, where, limit, getDocs, deleteDoc, setDoc, getDoc, documentId, runTransaction, serverTimestamp,
-  orderBy, startAt, endAt, increment
+  orderBy, startAt, endAt, increment, arrayUnion
 } from "firebase/firestore";
 import {
   signInAnonymously,
@@ -847,6 +847,13 @@ export const deleteVenue = async (venueId: string) => {
 
 export const saveGlobalConfig = async (config: AppConfig) => {
   await setDoc(doc(db, "settings", "global"), sanitizeData(config), { merge: true });
+};
+
+export const addVibeTag = async (newTag: string) => {
+  const settingsRef = doc(db, "settings", "global");
+  await updateDoc(settingsRef, {
+    availableVibeTags: arrayUnion(newTag)
+  });
 };
 
 export const subscribeToGlobalConfig = (callback: (config: AppConfig) => void) => {

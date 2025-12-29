@@ -3,7 +3,7 @@ import { Event, Series, Venue } from '../types';
 import { Plus, MapPin, Shuffle, X as XIcon, Calendar, ArrowLeft, Check, Music } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import { updateEvent, createEvent, uploadEventImage, searchUsers, searchDjs, createVenue, updateEventAsAdmin, subscribeToUserProfile } from '../services/firebase';
+import { updateEvent, createEvent, uploadEventImage, searchUsers, searchDjs, createVenue, updateEventAsAdmin, subscribeToUserProfile, addVibeTag } from '../services/firebase';
 import { searchVenuesExternal, getCoordinatesFromLocation } from '../services/geminiService';
 import { getLexiconPlaylists } from '../services/lexiconService';
 import { UserProfile } from '../types';
@@ -29,7 +29,8 @@ const DEFAULT_EVENT_IMAGES = [
 ];
 
 export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditingEvent, onClose, onSave, currentUserId, series }) => {
-    const { venues } = useData(); // Context access
+    const { venues, config } = useData(); // Context access
+    const { user } = useAuth();
     const [imageUploadProgress, setImageUploadProgress] = useState(false);
     const [venueSearchResults, setVenueSearchResults] = useState<{ name: string, address: string, latitude: number, longitude: number }[]>([]);
     const [isSearchingVenues, setIsSearchingVenues] = useState(false);
@@ -55,6 +56,9 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
     const [djSearchResults, setDjSearchResults] = useState<UserProfile[]>([]);
     const [isSearchingDjs, setIsSearchingDjs] = useState(false);
     const [selectedDjObjects, setSelectedDjObjects] = useState<UserProfile[]>([]);
+
+    // Vibe Tags State
+    const [tagInput, setTagInput] = useState('');
 
     // Track dirty fields
     const [dirtyFields, setDirtyFields] = useState<Set<string>>(new Set());
@@ -744,6 +748,88 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                                     markDirty('description');
                                 }}
                             />
+                        </div>
+
+                        {/* Vibe Tags */}
+                        <div>
+                            <label className="text-xs text-slate-400 block mb-1">Vibe Tags (Select relevant vibes)</label>
+
+                            {/* Selected Tags */}
+                            <div className="flex flex-wrap gap-2 mb-3">
+                                {editingEvent.vibeTags?.map(tag => (
+                                    <div key={tag} className="bg-purple-600/20 border border-purple-500/50 text-purple-200 text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                                        <span>#{tag}</span>
+                                        <button
+                                            onClick={() => {
+                                                setEditingEvent(prev => ({
+                                                    ...prev,
+                                                    vibeTags: (prev.vibeTags || []).filter(t => t !== tag)
+                                                }));
+                                                markDirty('vibeTags');
+                                            }}
+                                            className="hover:text-white"
+                                        >
+                                            <XIcon size={12} />
+                                        </button>
+                                    </div>
+                                ))}
+                                {(!editingEvent.vibeTags || editingEvent.vibeTags.length === 0) && (
+                                    <span className="text-slate-600 text-xs italic">No vibes selected yet.</span>
+                                )}
+                            </div>
+
+                            {/* Available Tags Selection */}
+                            <div className="bg-slate-950 p-3 rounded-lg border border-slate-800">
+                                <label className="text-[10px] text-slate-500 uppercase font-bold mb-2 block">Available Vibes:</label>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {(config.availableVibeTags || []).filter(t => !(editingEvent.vibeTags || []).includes(t)).map(tag => (
+                                        <button
+                                            key={tag}
+                                            onClick={() => {
+                                                setEditingEvent(prev => ({
+                                                    ...prev,
+                                                    vibeTags: [...(prev.vibeTags || []), tag]
+                                                }));
+                                                markDirty('vibeTags');
+                                            }}
+                                            className="bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs px-2 py-1 rounded-full border border-slate-700 transition"
+                                        >
+                                            #{tag}
+                                        </button>
+                                    ))}
+                                    {(config.availableVibeTags || []).length === 0 && <span className="text-xs text-slate-600">No system tags. Add one below!</span>}
+                                </div>
+
+                                {/* Add New Tag (Admin Only) */}
+                                {(user?.role === 'ADMIN') && (
+                                    <div className="mt-3 flex gap-2 border-t border-slate-800 pt-2">
+                                        <input
+                                            className="flex-1 bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white"
+                                            placeholder="Create new vibe tag..."
+                                            value={tagInput}
+                                            onChange={e => setTagInput(e.target.value)}
+                                        />
+                                        <button
+                                            onClick={async () => {
+                                                if (!tagInput.trim()) return;
+                                                const newTag = tagInput.trim();
+                                                // Add to global
+                                                await addVibeTag(newTag);
+                                                // Also auto-select it for this event
+                                                setEditingEvent(prev => ({
+                                                    ...prev,
+                                                    vibeTags: [...(prev.vibeTags || []), newTag]
+                                                }));
+                                                markDirty('vibeTags');
+                                                setTagInput('');
+                                            }}
+                                            className="px-3 py-1 bg-purple-900/50 hover:bg-purple-900 border border-purple-500/30 text-purple-300 text-xs font-bold rounded transition"
+                                        >
+                                            + Add
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         </div>
 
                         {/* Cover Image */}

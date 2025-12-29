@@ -240,6 +240,16 @@ export const EventDetailsPage: React.FC = () => {
                     <p className="text-slate-400 text-sm leading-relaxed">{event.description}</p>
                 </div>
 
+                {event.vibeTags && event.vibeTags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                        {event.vibeTags.map(tag => (
+                            <span key={tag} className="px-3 py-1 bg-purple-900/30 text-purple-300 rounded-full text-xs font-bold border border-purple-500/30">
+                                #{tag}
+                            </span>
+                        ))}
+                    </div>
+                )}
+
                 <div className="p-5 bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl border border-slate-700 shadow-xl space-y-4">
                     <div className="flex justify-between items-center">
                         <span className="text-sm font-bold text-slate-300">Live Status</span>

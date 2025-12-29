@@ -93,6 +93,7 @@ export interface Event {
   hasAdminViewed?: boolean; // Notification Tracking
   geoRestrictionEnabled?: boolean; // If true, requires user to be within 2km
   autoStartRequests?: boolean; // If true, requests open automatically/stay open
+  vibeTags?: string[]; // Phase 9: Vibe Tags
 }
 
 export interface LexiconConfig {
@@ -154,6 +155,7 @@ export interface AppConfig {
   spotifyToken?: string;
   adminPassword?: string;
   blacklistedWords?: string[];
+  availableVibeTags?: string[];
 }
 
 export type GlobalResourceType = 'EVENT' | 'DJ' | 'VENUE' | 'SONG';

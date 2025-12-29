@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './src/contexts/AuthContext';
 import { DataProvider } from './src/contexts/DataContext';
 import { AuthPage } from './src/pages/AuthPage';
 import { FeedPage } from './src/pages/FeedPage';
+import { MapHomePage } from './src/pages/MapHomePage';
 import { EventDetailsPage } from './src/pages/EventDetailsPage';
 import { EventQueuePage } from './src/pages/EventQueuePage';
 import { EventSearchPage } from './src/pages/EventSearchPage';
@@ -65,7 +66,7 @@ const AppLayout = () => {
 
                 <Route path="/" element={
                     <ProtectedRoute>
-                        <FeedPage />
+                        <MapHomePage />
                     </ProtectedRoute>
                 } />
 

@@ -1,11 +1,9 @@
-console.log("DEBUG: EventCard MODULE EVALUATING");
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Headphones, User, Clock, ArrowRight, CornerDownRight, LogOut, Music, Edit2 } from 'lucide-react';
+import { MapPin, Headphones, Clock, CornerDownRight, LogOut, Music, Edit2, ArrowRight } from 'lucide-react';
 import { Event } from '../types';
 import { checkInUser, checkOutUser } from '../services/firebase';
 import { ConfirmationModal } from './ConfirmationModal';
-import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 
@@ -13,9 +11,10 @@ interface EventCardProps {
     event: Event;
     userCheckedInEventId: string | null | undefined;
     onEdit?: (event: Event) => void;
+    onCardClick?: (event: Event) => void;
 }
 
-export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventId, onEdit }) => {
+export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventId, onEdit, onCardClick }) => {
     const navigate = useNavigate();
     const { user } = useAuth();
     const { events } = useData();
@@ -68,19 +67,7 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
         }
 
         const performCheckIn = async () => {
-            // SMART GEOLOCATION BYPASS
-            // Logic: Bypass if user is ADMIN, Event Owner, or an Assigned DJ.
-            const isOwner = user.id === event.ownerId;
-            const isAssignedDj = event.djIds?.includes(user.id);
-            const isAdmin = user.role === 'ADMIN';
-
-            const canBypass = isAdmin || isOwner || isAssignedDj;
-
-            if (!canBypass) {
-                // Mock Geolocation Check (placeholder for real distance check logic)
-            }
-
-            // If Test Mode is ON, we might skip a "Distance Check". 
+            // Bypass/Geo Logic would go here
             await checkInUser(user.id, event.id);
             navigate(`/event/${event.id}/queue`);
         };
@@ -98,77 +85,103 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
         await performCheckIn();
     };
 
+    const handleCardClick = () => {
+        if (onCardClick) {
+            onCardClick(event);
+        } else {
+            navigate(`/event/${event.id}`);
+        }
+    };
+
+    const handleDetailsClick = (e: React.MouseEvent) => {
+        e.stopPropagation();
+        navigate(`/event/${event.id}`);
+    };
+
     return (
         <div
-            onClick={() => navigate(`/event/${event.id}`)}
-            className="bg-slate-900 rounded-xl overflow-hidden border border-slate-800 cursor-pointer hover:border-purple-500/50 transition shadow-md group relative"
+            onClick={handleCardClick}
+            className="bg-slate-900 rounded-xl overflow-hidden border border-slate-800 cursor-pointer hover:border-purple-500/50 transition shadow-md group relative h-32 flex"
         >
-            <div className="flex h-32">
-                {/* Image Section - Left 1/3 */}
-                <div className="w-1/3 relative overflow-hidden">
-                    <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
-                    <div className="absolute inset-0 bg-gradient-to-r from-transparent to-slate-900/80 md:to-transparent" />
-                </div>
+            {/* Image Section - Left 1/3 */}
+            <div className="w-1/3 relative overflow-hidden h-full">
+                <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent to-slate-900/80 md:to-transparent" />
+            </div>
 
-                {/* Details Section - Right 2/3 */}
-                <div className="w-2/3 p-3 flex flex-col justify-between relative">
+            {/* Details Section - Right 2/3 */}
+            <div className="w-2/3 p-3 flex flex-col justify-between relative pl-4 z-10">
 
-                    <div>
-                        {/* Title */}
-                        <div className="flex items-baseline gap-2 mb-1 pr-8">
-                            <h3 className="font-bold text-lg text-white leading-tight line-clamp-2">{event.title}</h3>
-                            {volStr && <span className="text-[10px] uppercase font-bold text-purple-400 bg-purple-900/30 px-1.5 rounded">{volStr}</span>}
-                        </div>
+                <div>
+                    {/* Title */}
+                    <div className="flex items-baseline gap-2 mb-1 pr-8">
+                        <h3 className="font-bold text-lg text-white leading-tight line-clamp-2">{event.title}</h3>
+                        {volStr && <span className="text-[10px] uppercase font-bold text-purple-400 bg-purple-900/30 px-1.5 rounded">{volStr}</span>}
+                    </div>
 
-                        {/* Info Grid */}
-                        <div className="space-y-1">
-                            <div className="flex items-center gap-1.5 text-xs text-slate-300">
-                                <Headphones size={12} className="text-purple-400" />
-                                <span className="truncate">{event.djName}</span>
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs text-slate-400">
-                                <MapPin size={12} />
-                                <span className="truncate">{event.venueName}</span>
-                            </div>
+                    {/* Info Grid */}
+                    <div className="space-y-1">
+                        <div className="flex items-center gap-1.5 text-xs text-slate-300">
+                            <Headphones size={12} className="text-purple-400" />
+                            <span className="truncate">{event.djName}</span>
                         </div>
-                        <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium bg-slate-800/50 rounded px-1.5 py-0.5 w-fit">
-                            <Clock size={10} />
-                            <span>{event.startTime} - {event.endTime}</span>
+                        <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                            <MapPin size={12} />
+                            <span className="truncate">{event.venueName}</span>
                         </div>
-                        {event.isLive && (
-                            <div className="flex items-center gap-1.5 text-xs text-purple-400 font-bold bg-purple-900/20 border border-purple-500/20 rounded px-1.5 py-0.5 w-fit mt-1">
-                                <Music size={10} />
-                                <span>{event.requestCount || 0} Requests</span>
-                            </div>
-                        )}
                     </div>
                 </div>
+            </div>
 
-                {/* Quick Action Button - Absolute Right Bottom */}
-                <div className="absolute top-1/2 -translate-y-1/2 right-3 flex flex-col gap-2">
-                    {/* EDIT Button (Only if Owner and onEdit provided) */}
-                    {onEdit && user?.id === event.ownerId && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onEdit(event); }}
-                            className="p-3 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700 hover:border-slate-500"
-                            title="Edit Event"
-                        >
-                            <Edit2 size={18} />
-                        </button>
-                    )}
-
-                    {/* CHECK IN / OUT Button */}
-                    <button
-                        onClick={handleQuickAction}
-                        className={`p-3 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center
-                                ${isCheckedInHere
-                                ? 'bg-red-900/20 text-red-500 hover:bg-red-500 hover:text-white border border-red-900/50'
-                                : 'bg-slate-800 text-green-400 hover:bg-green-500 hover:text-black border border-slate-700 hover:border-green-400'
-                            }`}
-                    >
-                        {isCheckedInHere ? <LogOut size={18} /> : <CornerDownRight size={18} />}
-                    </button>
+            {/* Bottom Info Row (Time & Requests) - Positioned slightly differently to fit buttons */}
+            <div className="absolute bottom-3 left-[36%] flex gap-2">
+                <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium bg-slate-800/50 rounded px-1.5 py-0.5 w-fit">
+                    <Clock size={10} />
+                    <span>{event.startTime}</span>
                 </div>
+                {event.isLive && (
+                    <div className="flex items-center gap-1.5 text-xs text-purple-400 font-bold bg-purple-900/20 border border-purple-500/20 rounded px-1.5 py-0.5 w-fit">
+                        <Music size={10} />
+                        <span>{event.requestCount || 0}</span>
+                    </div>
+                )}
+            </div>
+
+            {/* Quick Action Button - Absolute Right Bottom */}
+            <div className="absolute top-1/2 -translate-y-1/2 right-2 flex flex-col gap-2 z-20">
+
+                {/* 1. Explicit Details Button */}
+                <button
+                    onClick={handleDetailsClick}
+                    className="p-2.5 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700 hover:border-slate-500"
+                    title="View Event Details"
+                >
+                    <ArrowRight size={16} />
+                </button>
+
+                {/* 2. Check In / Out Button */}
+                <button
+                    onClick={handleQuickAction}
+                    className={`p-2.5 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center
+                            ${isCheckedInHere
+                            ? 'bg-red-900/20 text-red-500 hover:bg-red-500 hover:text-white border border-red-900/50'
+                            : 'bg-slate-800 text-green-400 hover:bg-green-500 hover:text-black border border-slate-700 hover:border-green-400'
+                        }`}
+                    title={isCheckedInHere ? "Check Out" : "Check In"}
+                >
+                    {isCheckedInHere ? <LogOut size={16} /> : <CornerDownRight size={16} />}
+                </button>
+
+                {/* 3. EDIT Button (Only if Owner and onEdit provided) */}
+                {onEdit && user?.id === event.ownerId && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onEdit(event); }}
+                        className="p-2 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700 hover:border-slate-500 text-xs"
+                        title="Edit Event"
+                    >
+                        <Edit2 size={14} />
+                    </button>
+                )}
             </div>
 
             {/* Visual helper for "Active" */}
