@@ -10,10 +10,12 @@ import { EventQueuePage } from './src/pages/EventQueuePage';
 import { EventSearchPage } from './src/pages/EventSearchPage';
 import { AdminDashboardPage } from './src/pages/AdminDashboardPage';
 import { DjHubPage } from './src/pages/DjHubPage';
+import { EventSeriesPage } from './src/pages/EventSeriesPage';
 import { BottomNav } from './src/components/BottomNav';
 import { GlobalHeader } from './src/components/GlobalHeader';
 import { ProfilePage } from './src/pages/ProfilePage';
 import { CrateModePage } from './src/pages/CrateModePage';
+
 
 // ... (other imports same)
 
@@ -97,6 +99,12 @@ const AppLayout = () => {
                 <Route path="/dj" element={
                     <ProtectedRoute allowedRoles={['DJ', 'ADMIN']}>
                         <DjHubPage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/series/:id" element={
+                    <ProtectedRoute allowedRoles={['DJ', 'ADMIN']}>
+                        <EventSeriesPage />
                     </ProtectedRoute>
                 } />
 
