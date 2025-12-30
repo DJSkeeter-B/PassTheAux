@@ -44,9 +44,11 @@ export const EventQueuePage: React.FC = () => {
                 if (a.status === 'PLAYED' && b.status !== 'PLAYED') return 1;
                 if (a.status !== 'PLAYED' && b.status === 'PLAYED') return -1;
 
-                // Priority 3: Rejected (Bottom)
-                if (a.status === 'REJECTED' && b.status !== 'REJECTED') return 1;
-                if (a.status !== 'REJECTED' && b.status === 'REJECTED') return -1;
+                // Priority 3: Rejected / Unavailable (Bottom)
+                const isRejectedA = a.status === 'REJECTED' || a.status === 'UNAVAILABLE';
+                const isRejectedB = b.status === 'REJECTED' || b.status === 'UNAVAILABLE';
+                if (isRejectedA && !isRejectedB) return 1;
+                if (!isRejectedA && isRejectedB) return -1;
 
                 // Priority 4: Votes & Time
                 return b.votes - a.votes || a.timestamp - b.timestamp;
@@ -120,11 +122,12 @@ export const EventQueuePage: React.FC = () => {
         }
     };
 
-    const handleDJAction = async (songId: string, action: 'APPROVE' | 'REJECT' | 'PLAYED') => {
+    const handleDJAction = async (songId: string, action: 'APPROVE' | 'REJECT' | 'UNAVAILABLE' | 'PLAYED') => {
         // ... same logic ...
         const status = action === 'APPROVE' ? SongStatus.APPROVED
             : action === 'REJECT' ? SongStatus.REJECTED
-                : SongStatus.PLAYED;
+                : action === 'UNAVAILABLE' ? SongStatus.UNAVAILABLE
+                    : SongStatus.PLAYED;
         await updateSongStatus(songId, status);
     };
 
@@ -279,6 +282,7 @@ export const EventQueuePage: React.FC = () => {
                             onVote={handleVote}
                             onApprove={(id) => handleDJAction(id, 'APPROVE')}
                             onReject={(id) => handleDJAction(id, 'REJECT')}
+                            onUnavailable={(id) => handleDJAction(id, 'UNAVAILABLE')}
                             onMarkPlayed={(id) => handleDJAction(id, 'PLAYED')}
                         />
                     ))

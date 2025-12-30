@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, Music, User } from 'lucide-react';
+import { Home, Music, User, Compass } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 export const BottomNav: React.FC = () => {
@@ -12,6 +12,7 @@ export const BottomNav: React.FC = () => {
 
     const isActive = (path: string) => {
         if (path === '/') return location.pathname === '/';
+        if (path === '/explore') return location.pathname === '/explore';
         if (path === '/profile') return location.pathname === '/profile';
         // For queue, checking if we are in a queue page
         return location.pathname.includes('/queue');
@@ -39,6 +40,15 @@ export const BottomNav: React.FC = () => {
                 >
                     <Home size={24} strokeWidth={isActive('/') ? 2.5 : 2} />
                     <span className={`text-[10px] font-medium ${isActive('/') ? 'text-white' : 'text-slate-500'}`}>Events</span>
+                </button>
+
+                {/* Explore */}
+                <button
+                    onClick={() => navigate('/explore')}
+                    className={`flex flex-col items-center gap-1 p-2 rounded-lg transition min-w-[60px] ${isActive('/explore') ? 'text-blue-400' : 'text-slate-500 hover:text-slate-300'}`}
+                >
+                    <Compass size={24} strokeWidth={isActive('/explore') ? 2.5 : 2} />
+                    <span className={`text-[10px] font-medium ${isActive('/explore') ? 'text-blue-400' : 'text-slate-500'}`}>Explore</span>
                 </button>
 
                 {/* Queue - Only active if checked in, but always visible */}

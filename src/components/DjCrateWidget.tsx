@@ -24,7 +24,7 @@ export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWi
             const relevantSongs = songs.filter(s => {
                 if (activeTab === 'LIVE') return s.status === 'PENDING' || s.status === 'APPROVED';
                 if (activeTab === 'HISTORY') return s.status === 'PLAYED';
-                if (activeTab === 'DENIED') return s.status === 'REJECTED';
+                if (activeTab === 'DENIED') return s.status === 'REJECTED' || s.status === 'UNAVAILABLE';
                 return false;
             });
 
@@ -45,10 +45,11 @@ export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWi
     }, [eventId, activeTab]);
 
     // Handle Actions
-    const handleAction = async (songId: string, action: 'APPROVE' | 'REJECT' | 'PLAYED') => {
+    const handleAction = async (songId: string, action: 'APPROVE' | 'REJECT' | 'UNAVAILABLE' | 'PLAYED') => {
         const status = action === 'APPROVE' ? SongStatus.APPROVED
             : action === 'REJECT' ? SongStatus.REJECTED
-                : SongStatus.PLAYED;
+                : action === 'UNAVAILABLE' ? SongStatus.UNAVAILABLE
+                    : SongStatus.PLAYED;
         await updateSongStatus(songId, status);
     };
 
@@ -208,13 +209,15 @@ export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWi
                     queue.map(song => {
                         const isApproved = song.status === 'APPROVED';
                         const isRejected = song.status === 'REJECTED';
+                        const isUnavailable = song.status === 'UNAVAILABLE';
                         const isNegative = song.votes < 0;
 
                         // Dynamic Styles
                         let rowClass = "bg-slate-800/40 hover:bg-slate-800/80 border-slate-700/30"; // Default
                         if (isApproved) rowClass = "bg-green-900/20 hover:bg-green-900/30 border-green-500/30 shadow-[0_0_10px_rgba(34,197,94,0.1)]";
                         if (isRejected) rowClass = "bg-slate-900/20 opacity-75 grayscale border-transparent hover:opacity-100 hover:grayscale-0";
-                        if (isNegative && !isRejected && !isApproved) rowClass = "bg-red-900/10 hover:bg-red-900/20 border-red-500/30";
+                        if (isUnavailable) rowClass = "bg-amber-900/10 opacity-75 border-amber-900/30 hover:opacity-100 hover:bg-amber-900/20";
+                        if (isNegative && !isRejected && !isApproved && !isUnavailable) rowClass = "bg-red-900/10 hover:bg-red-900/20 border-red-500/30";
 
                         return (
                             <div
@@ -233,10 +236,11 @@ export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWi
                                             )}
                                         </div>
 
-                                        <span className={`font-bold truncate text-sm ${isApproved ? 'text-green-400' : isRejected ? 'text-slate-400' : 'text-slate-200'}`}>
+                                        <span className={`font-bold truncate text-sm ${isApproved ? 'text-green-400' : isRejected ? 'text-slate-400' : isUnavailable ? 'text-amber-500/70 line-through decoration-amber-500/30' : 'text-slate-200'}`}>
                                             {song.title}
                                         </span>
                                         {isApproved && <span className="bg-green-500 text-slate-900 text-[9px] font-extrabold px-1 py-0.5 rounded">LIVE</span>}
+                                        {isUnavailable && <span className="bg-amber-900/50 border border-amber-500/20 text-amber-500 text-[9px] font-extrabold px-1 py-0.5 rounded ml-1">UNAVAIL</span>}
                                     </div>
                                     <div className="flex items-center text-[11px] text-slate-400 gap-2">
                                         <span className="truncate max-w-[150px]">{song.artist}</span>
@@ -304,6 +308,15 @@ export const DjCrateWidget: React.FC<DjCrateWidgetProps> = ({ eventId, onCloseWi
                                                 title="Mark Played"
                                             >
                                                 <Play size={14} fill={isApproved ? "currentColor" : "none"} />
+                                            </button>
+
+                                            {/* Unavailable Button */}
+                                            <button
+                                                onClick={() => handleAction(song.id, 'UNAVAILABLE')}
+                                                className="p-1.5 rounded hover:bg-amber-500/20 text-slate-400 hover:text-amber-400 transition-colors"
+                                                title="Mark Unavailable"
+                                            >
+                                                <AlertCircle size={14} />
                                             </button>
 
                                             <button

@@ -1,12 +1,12 @@
-
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Event, Venue, AppConfig } from '../types';
-import { subscribeToEvents, subscribeToVenues, subscribeToGlobalConfig, isSpotifyTokenNearExpiry, triggerRefreshSpotifyToken } from '../services/firebase';
+import { Event, Venue, AppConfig, Series } from '../types';
+import { subscribeToEvents, subscribeToVenues, subscribeToGlobalConfig, isSpotifyTokenNearExpiry, triggerRefreshSpotifyToken, subscribeToAllSeries } from '../services/firebase';
 import { useAuth } from './AuthContext';
 
 interface DataContextType {
     events: Event[];
     venues: Venue[];
+    series: Series[];
     config: AppConfig;
     loading: boolean;
 }
@@ -14,6 +14,7 @@ interface DataContextType {
 const DataContext = createContext<DataContextType>({
     events: [],
     venues: [],
+    series: [],
     config: {},
     loading: true,
 });
@@ -24,6 +25,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { user } = useAuth();
     const [events, setEvents] = useState<Event[]>([]);
     const [venues, setVenues] = useState<Venue[]>([]);
+    const [series, setSeries] = useState<Series[]>([]);
     const [config, setConfig] = useState<AppConfig>({});
 
     const [loading, setLoading] = useState(true);
@@ -41,6 +43,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const unsubEvents = subscribeToEvents((d) => { if (mounted) setEvents(d); });
         const unsubVenues = subscribeToVenues((d) => { if (mounted) setVenues(d); });
+        const unsubSeries = subscribeToAllSeries((d) => { if (mounted) setSeries(d); });
         const unsubConfig = subscribeToGlobalConfig((d) => {
             if (mounted) {
                 setConfig(d);
@@ -71,7 +74,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, [user, config]);
 
     return (
-        <DataContext.Provider value={{ events, venues, config, loading }}>
+        <DataContext.Provider value={{ events, venues, series, config, loading }}>
             {children}
         </DataContext.Provider>
     );

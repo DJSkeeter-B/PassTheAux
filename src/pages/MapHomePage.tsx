@@ -5,9 +5,11 @@ import L from 'leaflet';
 import { useData } from '../contexts/DataContext';
 import { Event, Venue } from '../types';
 import { renderToString } from 'react-dom/server';
-import { MapPin, Music, Mic2, Users, SlidersHorizontal, Sparkles, X, ChevronUp, ChevronDown } from 'lucide-react';
+import { MapPin, Music, Mic2, Users, SlidersHorizontal, Sparkles, X, ChevronUp, ChevronDown, LayoutList, Search } from 'lucide-react';
 import { EventCard } from '../components/EventCard';
 import { useAuth } from '../contexts/AuthContext';
+import { TutorialPopup } from '../components/TutorialPopup';
+import { Info } from 'lucide-react';
 
 // --- ICONS ---
 const createCustomIcon = (color: string) => {
@@ -60,19 +62,28 @@ const MapController = ({ selectedVenueIds, venues }: { selectedVenueIds: string[
 
 // --- MAIN COMPONENT ---
 export const MapHomePage: React.FC = () => {
-    const { events, venues } = useData();
+    const { events, venues, series } = useData();
     const { user } = useAuth();
 
     // Filters & UI State
     const [selectedVenueIds, setSelectedVenueIds] = useState<string[]>([]);
     const [selectedDjNames, setSelectedDjNames] = useState<string[]>([]);
+    const [selectedSeriesIds, setSelectedSeriesIds] = useState<string[]>([]);
     const [selectedVibeTags, setSelectedVibeTags] = useState<string[]>([]);
-    const [filterMode, setFilterMode] = useState<'VENUES' | 'DJS' | 'VIBES'>('VENUES');
+    const [searchTerm, setSearchTerm] = useState('');
+    const [filterMode, setFilterMode] = useState<'VENUES' | 'DJS' | 'VIBES' | 'SERIES' | 'SEARCH'>('VENUES');
 
-    // UI Layout State: "isFullMap" toggles between compact map (default) and full view
-    // Actually user wants "Effective Space". We will use a fixed flex approach. 
-    // But maybe allow expanding/collapsing the filter row specifically.
     const [isFilterExpanded, setIsFilterExpanded] = useState(true);
+    const [showTutorial, setShowTutorial] = useState(false);
+
+    useEffect(() => {
+        const hasSeen = localStorage.getItem('hasSeenTutorialV1');
+        if (!hasSeen) {
+            // Small delay to ensure map is loaded
+            const timer = setTimeout(() => setShowTutorial(true), 1500);
+            return () => clearTimeout(timer);
+        }
+    }, []);
 
     const center: [number, number] = [44.6488, -63.5752];
     const zoom = 11;
@@ -115,16 +126,44 @@ export const MapHomePage: React.FC = () => {
         return Array.from(vibes).sort();
     }, [activeEvents]);
 
+    const activeSeries = useMemo(() => {
+        const sSet = new Set<string>();
+        activeEvents.forEach(e => {
+            if (e.seriesId) sSet.add(e.seriesId);
+        });
+        return series.filter(s => sSet.has(s.id)).sort((a, b) => a.title.localeCompare(b.title));
+    }, [activeEvents, series]);
+
+
     const displayedEvents = useMemo(() => {
+        const term = searchTerm.toLowerCase().trim();
+
         return activeEvents.filter(e => {
+            // 1. Tag Filters
             const venueMatch = selectedVenueIds.length === 0 ||
                 (e.venueId && selectedVenueIds.includes(e.venueId)) ||
                 (e.venueName && venues.some(v => v.name.toLowerCase() === e.venueName.toLowerCase() && selectedVenueIds.includes(v.id)));
             const djMatch = selectedDjNames.length === 0 || (e.djName && selectedDjNames.includes(e.djName));
+            const seriesMatch = selectedSeriesIds.length === 0 || (e.seriesId && selectedSeriesIds.includes(e.seriesId));
             const vibeMatch = selectedVibeTags.length === 0 || (e.vibeTags && e.vibeTags.some(tag => selectedVibeTags.includes(tag)));
-            return venueMatch && djMatch && vibeMatch;
+
+            // 2. Text Search
+            let searchMatch = true;
+            if (term) {
+                // Resolve Series Title
+                const sTitle = e.seriesId ? series.find(s => s.id === e.seriesId)?.title?.toLowerCase() : '';
+
+                searchMatch =
+                    e.title.toLowerCase().includes(term) ||
+                    e.djName.toLowerCase().includes(term) ||
+                    (e.venueName?.toLowerCase().includes(term) ?? false) ||
+                    (sTitle?.toLowerCase().includes(term) ?? false) ||
+                    (e.vibeTags?.some(t => t.toLowerCase().includes(term)) ?? false);
+            }
+
+            return venueMatch && djMatch && seriesMatch && vibeMatch && searchMatch;
         });
-    }, [activeEvents, selectedVenueIds, selectedDjNames, selectedVibeTags, venues]);
+    }, [activeEvents, selectedVenueIds, selectedDjNames, selectedSeriesIds, selectedVibeTags, searchTerm, venues, series]);
 
     const scrollItems = useMemo(() => {
         type ScrollItem = { type: 'header'; label: string; id: string } | { type: 'event'; data: Event; id: string };
@@ -167,11 +206,13 @@ export const MapHomePage: React.FC = () => {
     const clearFilters = () => {
         setSelectedVenueIds([]);
         setSelectedDjNames([]);
+        setSelectedSeriesIds([]);
         setSelectedVibeTags([]);
+        setSearchTerm('');
     };
 
-    const hasFilters = selectedVenueIds.length > 0 || selectedDjNames.length > 0 || selectedVibeTags.length > 0;
-    const filterCount = selectedVenueIds.length + selectedDjNames.length + selectedVibeTags.length;
+    const hasFilters = selectedVenueIds.length > 0 || selectedDjNames.length > 0 || selectedSeriesIds.length > 0 || selectedVibeTags.length > 0 || searchTerm.length > 0;
+    const filterCount = selectedVenueIds.length + selectedDjNames.length + selectedSeriesIds.length + selectedVibeTags.length + (searchTerm ? 1 : 0);
 
     return (
         <div className="flex flex-col h-[calc(100vh-6rem)] relative overflow-hidden bg-slate-950">
@@ -190,8 +231,9 @@ export const MapHomePage: React.FC = () => {
                     {mapMarkers.map(({ venue, events }) => {
                         const isVenueKeyMatch = selectedVenueIds.length === 0 || selectedVenueIds.includes(venue.id);
                         const hasMatchingDjEvents = selectedDjNames.length === 0 || events.some(e => selectedDjNames.includes(e.djName));
+                        const hasMatchingSeriesEvents = selectedSeriesIds.length === 0 || events.some(e => e.seriesId && selectedSeriesIds.includes(e.seriesId));
                         const hasMatchingVibeEvents = selectedVibeTags.length === 0 || events.some(e => e.vibeTags && e.vibeTags.some(t => selectedVibeTags.includes(t)));
-                        const isHighlighted = isVenueKeyMatch && hasMatchingDjEvents && hasMatchingVibeEvents;
+                        const isHighlighted = isVenueKeyMatch && hasMatchingDjEvents && hasMatchingSeriesEvents && hasMatchingVibeEvents;
                         return (
                             <Marker
                                 key={venue.id}
@@ -212,6 +254,14 @@ export const MapHomePage: React.FC = () => {
                     <span className="w-1.5 h-1.5 bg-purple-500 rounded-full animate-pulse"></span>
                     <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest leading-none">Nova Scotia</span>
                 </div>
+
+                {/* Tutorial Trigger */}
+                <button
+                    onClick={() => setShowTutorial(true)}
+                    className="absolute top-2 right-2 z-[400] w-8 h-8 rounded-full bg-slate-900/80 backdrop-blur border border-slate-700/50 flex items-center justify-center text-slate-400 hover:text-white transition shadow-lg"
+                >
+                    <Info size={16} />
+                </button>
             </div>
 
             {/* 2. COMPACT FILTER BAR */}
@@ -219,18 +269,32 @@ export const MapHomePage: React.FC = () => {
                 {/* Top Row: Search/Mode Toggles + Expand Button */}
                 <div className="flex items-center justify-between p-2">
                     {/* Mode Tabs */}
-                    <div className="flex gap-1 bg-slate-900/50 p-0.5 rounded-lg border border-slate-800">
-                        {(['VENUES', 'DJS', 'VIBES'] as const).map(mode => (
+                    <div className="flex gap-1 bg-slate-900/50 p-0.5 rounded-lg border border-slate-800 overflow-x-auto hide-scrollbar max-w-[70vw]">
+                        {/* SEARCH button first */}
+                        <button
+                            onClick={() => { setFilterMode('SEARCH'); setIsFilterExpanded(true); }}
+                            className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase flex items-center gap-1 transition-all
+                                ${filterMode === 'SEARCH' || searchTerm
+                                    ? 'bg-emerald-600 text-white shadow-sm'
+                                    : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                            <Search size={10} />
+                            Search
+                        </button>
+                        <div className="w-[1px] bg-slate-700 mx-0.5 h-4 self-center" />
+
+                        {(['VENUES', 'DJS', 'SERIES', 'VIBES'] as const).map(mode => (
                             <button
                                 key={mode}
                                 onClick={() => { setFilterMode(mode); setIsFilterExpanded(true); }}
-                                className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase flex items-center gap-1 transition-all
+                                className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase flex items-center gap-1 transition-all whitespace-nowrap
                                     ${filterMode === mode
                                         ? 'bg-purple-600 text-white shadow-sm'
                                         : 'text-slate-500 hover:text-slate-300'}`}
                             >
                                 {mode === 'VENUES' && <MapPin size={10} />}
                                 {mode === 'DJS' && <Users size={10} />}
+                                {mode === 'SERIES' && <LayoutList size={10} />}
                                 {mode === 'VIBES' && <Sparkles size={10} />}
                                 {mode}
                             </button>
@@ -238,66 +302,100 @@ export const MapHomePage: React.FC = () => {
                     </div>
 
                     {/* Right Side: Clear + Collapse */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 pl-2">
                         {hasFilters && (
-                            <button onClick={clearFilters} className="text-[10px] font-bold text-red-400 hover:text-red-300 uppercase bg-slate-900 px-2 py-1 rounded border border-red-900/30">
-                                Clear ({filterCount})
+                            <button onClick={clearFilters} className="text-[10px] font-bold text-red-400 hover:text-red-300 uppercase bg-slate-900 px-2 py-1 rounded border border-red-900/30 whitespace-nowrap">
+                                ({filterCount}) X
                             </button>
                         )}
                         <button
                             onClick={() => setIsFilterExpanded(!isFilterExpanded)}
-                            className="w-6 h-6 flex items-center justify-center text-slate-500 hover:text-white bg-slate-900 rounded border border-slate-800"
+                            className="w-6 h-6 flex-shrink-0 flex items-center justify-center text-slate-500 hover:text-white bg-slate-900 rounded border border-slate-800"
                         >
                             {isFilterExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
                     </div>
                 </div>
 
-                {/* Expanded Filter Area (Chips) */}
+                {/* Expanded Filter Area (Chips OR Search Input) */}
                 {isFilterExpanded && (
-                    <div className="w-full overflow-x-auto flex gap-2 px-2 pb-2 snap-x hide-scrollbar">
-                        {filterMode === 'VENUES' && activeVenues.map(v => (
-                            <button
-                                key={v.id}
-                                onClick={() => setSelectedVenueIds(p => p.includes(v.id) ? p.filter(x => x !== v.id) : [...p, v.id])}
-                                className={`flex-shrink-0 text-xs font-bold px-3 py-1 rounded-full border transition whitespace-nowrap flex items-center gap-1.5 snap-start
-                                    ${selectedVenueIds.includes(v.id)
-                                        ? 'bg-purple-900/40 border-purple-500 text-white'
-                                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600'}`}
-                            >
-                                <MapPin size={10} />
-                                {v.name}
-                            </button>
-                        ))}
-                        {filterMode === 'DJS' && activeDjs.map(dj => (
-                            <button
-                                key={dj}
-                                onClick={() => setSelectedDjNames(p => p.includes(dj) ? p.filter(x => x !== dj) : [...p, dj])}
-                                className={`flex-shrink-0 text-xs font-bold px-3 py-1 rounded-full border transition whitespace-nowrap flex items-center gap-1.5 snap-start
-                                    ${selectedDjNames.includes(dj)
-                                        ? 'bg-blue-900/40 border-blue-500 text-white'
-                                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600'}`}
-                            >
-                                <Users size={10} />
-                                {dj}
-                            </button>
-                        ))}
-                        {filterMode === 'VIBES' && activeVibes.map(tag => (
-                            <button
-                                key={tag}
-                                onClick={() => setSelectedVibeTags(p => p.includes(tag) ? p.filter(x => x !== tag) : [...p, tag])}
-                                className={`flex-shrink-0 text-xs font-bold px-3 py-1 rounded-full border transition whitespace-nowrap flex items-center gap-1.5 snap-start
-                                    ${selectedVibeTags.includes(tag)
-                                        ? 'bg-amber-900/40 border-amber-500 text-white'
-                                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600'}`}
-                            >
-                                <Sparkles size={10} />
-                                {tag}
-                            </button>
-                        ))}
-                        {/* Empty States */}
-                        {filterMode === 'VENUES' && activeVenues.length === 0 && <span className="text-xs text-slate-600 px-2 italic">None found</span>}
-                        {filterMode === 'DJS' && activeDjs.length === 0 && <span className="text-xs text-slate-600 px-2 italic">None found</span>}
+                    <div className="w-full overflow-x-auto flex gap-2 px-2 pb-2 snap-x hide-scrollbar min-h-[34px]">
+
+                        {filterMode === 'SEARCH' ? (
+                            <div className="w-full flex items-center px-1">
+                                <div className="relative w-full max-w-sm">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={14} />
+                                    <input
+                                        type="text"
+                                        placeholder="Search events, DJs, venues, vibes..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-full py-1.5 pl-9 pr-4 text-sm text-white focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 placeholder:text-slate-600"
+                                        autoFocus
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <>
+                                {filterMode === 'VENUES' && activeVenues.map(v => (
+                                    <button
+                                        key={v.id}
+                                        onClick={() => setSelectedVenueIds(p => p.includes(v.id) ? p.filter(x => x !== v.id) : [...p, v.id])}
+                                        className={`flex-shrink-0 text-xs font-bold px-3 py-1 rounded-full border transition whitespace-nowrap flex items-center gap-1.5 snap-start
+                                            ${selectedVenueIds.includes(v.id)
+                                                ? 'bg-purple-900/40 border-purple-500 text-white'
+                                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600'}`}
+                                    >
+                                        <MapPin size={10} />
+                                        {v.name}
+                                    </button>
+                                ))}
+                                {filterMode === 'DJS' && activeDjs.map(dj => (
+                                    <button
+                                        key={dj}
+                                        onClick={() => setSelectedDjNames(p => p.includes(dj) ? p.filter(x => x !== dj) : [...p, dj])}
+                                        className={`flex-shrink-0 text-xs font-bold px-3 py-1 rounded-full border transition whitespace-nowrap flex items-center gap-1.5 snap-start
+                                            ${selectedDjNames.includes(dj)
+                                                ? 'bg-blue-900/40 border-blue-500 text-white'
+                                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600'}`}
+                                    >
+                                        <Users size={10} />
+                                        {dj}
+                                    </button>
+                                ))}
+                                {filterMode === 'SERIES' && activeSeries.map(s => (
+                                    <button
+                                        key={s.id}
+                                        onClick={() => setSelectedSeriesIds(p => p.includes(s.id) ? p.filter(x => x !== s.id) : [...p, s.id])}
+                                        className={`flex-shrink-0 text-xs font-bold px-3 py-1 rounded-full border transition whitespace-nowrap flex items-center gap-1.5 snap-start
+                                            ${selectedSeriesIds.includes(s.id)
+                                                ? 'bg-emerald-900/40 border-emerald-500 text-white'
+                                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600'}`}
+                                    >
+                                        <LayoutList size={10} />
+                                        {s.title}
+                                    </button>
+                                ))}
+                                {filterMode === 'VIBES' && activeVibes.map(tag => (
+                                    <button
+                                        key={tag}
+                                        onClick={() => setSelectedVibeTags(p => p.includes(tag) ? p.filter(x => x !== tag) : [...p, tag])}
+                                        className={`flex-shrink-0 text-xs font-bold px-3 py-1 rounded-full border transition whitespace-nowrap flex items-center gap-1.5 snap-start
+                                            ${selectedVibeTags.includes(tag)
+                                                ? 'bg-amber-900/40 border-amber-500 text-white'
+                                                : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-600'}`}
+                                    >
+                                        <Sparkles size={10} />
+                                        {tag}
+                                    </button>
+                                ))}
+
+                                {/* Empty States */}
+                                {filterMode === 'VENUES' && activeVenues.length === 0 && <span className="text-xs text-slate-600 px-2 italic">None found</span>}
+                                {filterMode === 'DJS' && activeDjs.length === 0 && <span className="text-xs text-slate-600 px-2 italic">None found</span>}
+                                {filterMode === 'SERIES' && activeSeries.length === 0 && <span className="text-xs text-slate-600 px-2 italic">None found</span>}
+                            </>
+                        )}
                     </div>
                 )}
             </div>
@@ -309,7 +407,9 @@ export const MapHomePage: React.FC = () => {
                     {scrollItems.length === 0 ? (
                         <div className="w-full flex flex-col items-center justify-center opacity-50">
                             <Mic2 size={32} className="text-slate-600 mb-2" />
-                            <p className="text-sm font-bold text-slate-500">No Events Found</p>
+                            <p className="text-sm font-bold text-slate-500">
+                                {searchTerm ? `No matches for "${searchTerm}"` : 'No Events Found'}
+                            </p>
                         </div>
                     ) : (
                         scrollItems.map(item => {
@@ -342,6 +442,7 @@ export const MapHomePage: React.FC = () => {
                 </div>
             </div>
 
+            <TutorialPopup isOpen={showTutorial} onClose={() => setShowTutorial(false)} />
         </div>
     );
 };

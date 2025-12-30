@@ -4,13 +4,14 @@ import { X, Download, Share2 } from 'lucide-react';
 import { Event } from '../types';
 
 interface QRCodeModalProps {
-    event: Event;
+    title: string;
+    subtitle?: string;
+    link: string;
+    logoUrl?: string;
     onClose: () => void;
 }
 
-export const QRCodeModal: React.FC<QRCodeModalProps> = ({ event, onClose }) => {
-    const eventLink = `https://passtheaux.app/event/${event.id}`; // In real app, use window.location.origin
-
+export const QRCodeModal: React.FC<QRCodeModalProps> = ({ title, subtitle, link, logoUrl, onClose }) => {
     // Logic: If customQrImageUrl exists (LOGO provided), we might want to overlay it.
     // React-qr-code doesn't support center image natively efficiently without SVG manipulation.
     // For MVP/Speed, we will just use the standard QR code, but if we wanted "Logo Centric", 
@@ -28,8 +29,8 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ event, onClose }) => {
                 </button>
 
                 <div className="text-center mb-6">
-                    <h3 className="text-2xl font-black text-slate-900 mb-1">{event.title}</h3>
-                    <p className="text-slate-500 text-sm font-medium">@{event.venueName}</p>
+                    <h3 className="text-2xl font-black text-slate-900 mb-1">{title}</h3>
+                    {subtitle && <p className="text-slate-500 text-sm font-medium">{subtitle}</p>}
                 </div>
 
                 <div className="relative p-2 bg-white rounded-xl shadow-inner border border-slate-100">
@@ -37,17 +38,17 @@ export const QRCodeModal: React.FC<QRCodeModalProps> = ({ event, onClose }) => {
                         <QRCode
                             size={256}
                             style={{ height: "auto", maxWidth: "100%", width: "100%" }}
-                            value={eventLink}
+                            value={link}
                             viewBox={`0 0 256 256`}
                             fgColor="#000000"
                             bgColor="#ffffff"
                         />
                     </div>
                     {/* Logo Overlay Logic */}
-                    {event.customQrImageUrl && (
+                    {logoUrl && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                             <div className="w-12 h-12 bg-white p-1 rounded-full shadow-lg flex items-center justify-center overflow-hidden">
-                                <img src={event.customQrImageUrl} alt="Logo" className="w-full h-full object-cover rounded-full" />
+                                <img src={logoUrl} alt="Logo" className="w-full h-full object-cover rounded-full" />
                             </div>
                         </div>
                     )}

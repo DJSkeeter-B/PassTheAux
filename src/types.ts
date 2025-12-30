@@ -2,6 +2,7 @@ export enum SongStatus {
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
+  UNAVAILABLE = 'UNAVAILABLE',
   PLAYED = 'PLAYED'
 }
 
@@ -167,6 +168,14 @@ export interface GlobalSearchResult {
   subtitle?: string; // Date, @username, Address
   imageUrl?: string;
   metadata?: any; // Extra data like coordinates, eventId etc.
+}
+
+export interface DataContextType {
+  events: Event[];
+  venues: Venue[];
+  series: Series[];
+  config: AppConfig;
+  loading: boolean;
 }
 
 export interface HistoryItem {

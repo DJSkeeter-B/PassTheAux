@@ -291,7 +291,13 @@ export const EventDetailsPage: React.FC = () => {
                 </div>
             </div>
             {showQrModal && event && (
-                <QRCodeModal event={event} onClose={() => setShowQrModal(false)} />
+                <QRCodeModal
+                    title={event.title}
+                    subtitle={`@${event.venueName}`}
+                    link={`${window.location.origin}/event/${event.id}`}
+                    logoUrl={event.customQrImageUrl}
+                    onClose={() => setShowQrModal(false)}
+                />
             )}
             <ConfirmationModal
                 isOpen={confirmModal.isOpen}

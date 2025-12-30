@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Event, Series, Venue } from '../types';
-import { Plus, MapPin, Shuffle, X as XIcon, Calendar, ArrowLeft, Check, Music } from 'lucide-react';
+import { Plus, MapPin, Shuffle, X as XIcon, Calendar, ArrowLeft, Check, Music, CornerDownRight } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { updateEvent, createEvent, uploadEventImage, searchUsers, searchDjs, createVenue, updateEventAsAdmin, subscribeToUserProfile, addVibeTag } from '../services/firebase';
@@ -28,7 +28,73 @@ const DEFAULT_EVENT_IMAGES = [
     "https://images.unsplash.com/photo-1514525253440-b393452e8d26?w=800&auto=format&fit=crop"  // Vibes
 ];
 
-export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditingEvent, onClose, onSave, currentUserId, series }) => {
+// --- TIME PICKER COMPONENT ---
+const TimePicker12h = ({ value, onChange }: { value: string, onChange: (val: string) => void }) => {
+    // Parse 24h value to 12h parts
+    const parseTime = (val: string) => {
+        if (!val) return { h: '10', m: '00', p: 'PM' };
+        const [h24, m] = val.split(':').map(Number);
+        const p = h24 >= 12 ? 'PM' : 'AM';
+        const h = h24 % 12 || 12;
+        return {
+            h: h.toString(),
+            m: m < 10 ? `0${m}` : m.toString(),
+            p
+        };
+    };
+
+    const { h, m, p } = parseTime(value);
+
+    const updateTime = (newH: string, newM: string, newP: string) => {
+        let hour = parseInt(newH);
+        if (newP === 'PM' && hour !== 12) hour += 12;
+        if (newP === 'AM' && hour === 12) hour = 0;
+        const h24Str = hour < 10 ? `0${hour}` : hour.toString();
+        // Ensure Minutes are 2 digits?? They are coming from select so they should be.
+        const mStr = newM.length === 1 ? `0${newM}` : newM;
+        onChange(`${h24Str}:${mStr}`);
+    };
+
+    // Generate Minutes (00, 05, ... 55)
+    const minutes = Array.from({ length: 12 }, (_, i) => {
+        const val = i * 5;
+        return val < 10 ? `0${val}` : val.toString();
+    });
+
+    return (
+        <div className="flex bg-slate-900 rounded border border-slate-600 p-1 gap-1">
+            <select
+                value={h}
+                onChange={(e) => updateTime(e.target.value, m, p)}
+                className="bg-transparent text-white text-sm font-bold outline-none cursor-pointer hover:text-purple-400 text-center w-10 appearance-none pl-2"
+            >
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(hour => (
+                    <option key={hour} value={hour} className="bg-slate-900">{hour}</option>
+                ))}
+            </select>
+            <span className="text-slate-500 font-bold">:</span>
+            <select
+                value={m}
+                onChange={(e) => updateTime(h, e.target.value, p)}
+                className="bg-transparent text-white text-sm font-bold outline-none cursor-pointer hover:text-purple-400 text-center w-10 appearance-none"
+            >
+                {minutes.map(min => (
+                    <option key={min} value={min} className="bg-slate-900">{min}</option>
+                ))}
+            </select>
+            <div className="w-[1px] bg-slate-700 mx-1"></div>
+            <button
+                type="button"
+                onClick={() => updateTime(h, m, p === 'AM' ? 'PM' : 'AM')}
+                className={`text-xs font-bold px-1 rounded ${p === 'AM' ? 'text-slate-400 hover:text-white' : 'text-purple-400 hover:text-purple-300'}`}
+            >
+                {p}
+            </button>
+        </div>
+    );
+};
+
+export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditingEvent, onClose, currentUserId, series = [], onSave }) => {
     const { venues, config } = useData(); // Context access
     const { user } = useAuth();
     const [imageUploadProgress, setImageUploadProgress] = useState(false);
@@ -537,27 +603,30 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
                                     <label className="text-xs text-slate-400 block mb-1">Start Time</label>
-                                    <input
-                                        type="time"
-                                        className="w-full bg-slate-900 p-2 rounded border border-slate-600 text-white focus:border-purple-500 outline-none"
-                                        value={editingEvent.startTime || ''}
-                                        onChange={e => {
-                                            setEditingEvent({ ...editingEvent, startTime: e.target.value });
+                                    <TimePicker12h
+                                        value={editingEvent.startTime || '21:00'}
+                                        onChange={(val) => {
+                                            setEditingEvent({ ...editingEvent, startTime: val });
                                             markDirty('startTime');
                                         }}
                                     />
                                 </div>
                                 <div>
                                     <label className="text-xs text-slate-400 block mb-1">End Time</label>
-                                    <input
-                                        type="time"
-                                        className="w-full bg-slate-900 p-2 rounded border border-slate-600 text-white focus:border-purple-500 outline-none"
-                                        value={editingEvent.endTime || ''}
-                                        onChange={e => {
-                                            setEditingEvent({ ...editingEvent, endTime: e.target.value });
+                                    <TimePicker12h
+                                        value={editingEvent.endTime || '02:00'}
+                                        onChange={(val) => {
+                                            setEditingEvent({ ...editingEvent, endTime: val });
                                             markDirty('endTime');
                                         }}
                                     />
+                                    {/* Ends Next Day Hint */}
+                                    {editingEvent.startTime && editingEvent.endTime && editingEvent.endTime < editingEvent.startTime && (
+                                        <p className="text-[10px] text-purple-400 mt-1.5 flex items-center gap-1">
+                                            <CornerDownRight size={10} />
+                                            Ends following day
+                                        </p>
+                                    )}
                                 </div>
                             </div>
                         </div>

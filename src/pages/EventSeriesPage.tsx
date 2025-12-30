@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Calendar, MapPin, Music, ArrowLeft, ChevronDown, Clock, Activity, Heart, Share2 } from 'lucide-react';
 import { groupEventsByDate } from '../utils/dateUtils';
 import { Series } from '../types';
+import { QRCodeModal } from '../components/QRCodeModal';
 
 export const EventSeriesPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
@@ -14,7 +15,10 @@ export const EventSeriesPage: React.FC = () => {
     const { user } = useAuth();
 
     // State for series selector dropdown
+    // State for series selector dropdown
     const [showSeriesDropdown, setShowSeriesDropdown] = useState(false);
+    const [activeStat, setActiveStat] = useState<'EVENTS' | 'REQUESTS' | 'VIBE'>('EVENTS');
+    const [showShareModal, setShowShareModal] = useState(false);
 
     // Get current series
     const currentSeries = series.find(s => s.id === id);
@@ -90,13 +94,69 @@ export const EventSeriesPage: React.FC = () => {
                     </div>
                 )}
 
-                {/* Back Button */}
-                <button
-                    onClick={() => navigate('/dj')}
-                    className="absolute top-4 left-4 z-20 p-2 bg-black/40 backdrop-blur-md rounded-full text-white hover:bg-black/60 transition"
-                >
-                    <ArrowLeft size={20} />
-                </button>
+                {/* Top Header Bar */}
+                <div className="absolute top-0 left-0 right-0 z-30 p-4 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent">
+                    <button
+                        onClick={() => navigate('/dj')}
+                        className="p-2 bg-black/40 backdrop-blur-md rounded-full text-white hover:bg-black/60 transition"
+                    >
+                        <ArrowLeft size={20} />
+                    </button>
+
+                    {/* Series Selector Dropdown */}
+                    <div className="relative group">
+                        <div
+                            className="flex items-center gap-2 cursor-pointer bg-black/40 hover:bg-black/60 backdrop-blur-md px-4 py-2 rounded-xl transition border border-white/10 hover:border-white/30"
+                            onClick={() => setShowSeriesDropdown(!showSeriesDropdown)}
+                        >
+                            <h1 className="text-lg font-bold text-white truncate max-w-[200px] md:max-w-md">
+                                {currentSeries.title}
+                            </h1>
+                            <ChevronDown size={16} className={`text-slate-300 transition-transform ${showSeriesDropdown ? 'rotate-180' : ''}`} />
+                        </div>
+
+                        {/* Dropdown Menu */}
+                        {showSeriesDropdown && (
+                            <div className="absolute top-full left-0 mt-2 w-72 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50">
+                                <div className="max-h-[60vh] overflow-y-auto">
+                                    {mySeries.map(s => (
+                                        <div
+                                            key={s.id}
+                                            onClick={() => {
+                                                navigate(`/series/${s.id}`);
+                                                setShowSeriesDropdown(false);
+                                            }}
+                                            className={`p-3 hover:bg-slate-800 cursor-pointer flex items-center gap-3 border-b border-slate-800/50 last:border-0 ${s.id === id ? 'bg-purple-900/10' : ''}`}
+                                        >
+                                            <div className="w-10 h-10 rounded bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
+                                                {s.posterUrl ? (
+                                                    <img src={s.posterUrl} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    <Music size={16} className="text-slate-600" />
+                                                )}
+                                            </div>
+                                            <div className="min-w-0 flex-1">
+                                                <div className={`text-sm font-bold truncate ${s.id === id ? 'text-purple-400' : 'text-white'}`}>{s.title}</div>
+                                                <div className="text-[10px] text-slate-500">
+                                                    {events.filter(e => e.seriesId === s.id).length} events
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="flex-1" /> {/* Spacer */}
+
+                    <button
+                        className="p-2 bg-black/40 backdrop-blur-md rounded-full text-white hover:bg-green-600 transition"
+                        title="Share Series"
+                    >
+                        <Share2 size={20} />
+                    </button>
+                </div>
 
                 {/* Series Content Overlay */}
                 <div className="absolute bottom-0 left-0 right-0 p-6 z-20 md:pl-40">
@@ -107,47 +167,9 @@ export const EventSeriesPage: React.FC = () => {
                                     <MapPin size={12} /> {venue.name}
                                 </div>
                             )}
-                            <div className="relative group">
-                                <h1
-                                    className="text-3xl md:text-5xl font-black text-white mb-2 cursor-pointer flex items-center gap-2"
-                                    onClick={() => setShowSeriesDropdown(!showSeriesDropdown)}
-                                >
-                                    {currentSeries.title}
-                                    <ChevronDown size={24} className={`text-slate-400 transition-transform ${showSeriesDropdown ? 'rotate-180' : ''}`} />
-                                </h1>
-
-                                {/* Series Selector Dropdown */}
-                                {showSeriesDropdown && (
-                                    <div className="absolute top-full left-0 mt-2 w-64 bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden z-50">
-                                        <div className="max-h-60 overflow-y-auto">
-                                            {mySeries.map(s => (
-                                                <div
-                                                    key={s.id}
-                                                    onClick={() => {
-                                                        navigate(`/series/${s.id}`);
-                                                        setShowSeriesDropdown(false);
-                                                    }}
-                                                    className={`p-3 hover:bg-slate-800 cursor-pointer flex items-center gap-3 border-b border-slate-800/50 last:border-0 ${s.id === id ? 'bg-purple-900/10' : ''}`}
-                                                >
-                                                    <div className="w-8 h-8 rounded bg-slate-800 flex items-center justify-center overflow-hidden shrink-0">
-                                                        {s.posterUrl ? (
-                                                            <img src={s.posterUrl} className="w-full h-full object-cover" />
-                                                        ) : (
-                                                            <Music size={14} className="text-slate-600" />
-                                                        )}
-                                                    </div>
-                                                    <div className="min-w-0">
-                                                        <div className={`text-sm font-bold truncate ${s.id === id ? 'text-purple-400' : 'text-white'}`}>{s.title}</div>
-                                                        <div className="text-[10px] text-slate-500">
-                                                            {events.filter(e => e.seriesId === s.id).length} events
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                            <h1 className="text-3xl md:text-5xl font-black text-white mb-2 shadow-black drop-shadow-lg">
+                                {currentSeries.title}
+                            </h1>
 
                             <p className="text-slate-300 text-sm max-w-xl line-clamp-2 md:line-clamp-none">
                                 {currentSeries.description || "No description provided."}
@@ -159,26 +181,76 @@ export const EventSeriesPage: React.FC = () => {
 
             <div className="max-w-4xl mx-auto px-4 mt-8 space-y-8">
                 {/* Stats Grid */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex flex-col items-center justify-center text-center">
-                        <Calendar className="text-purple-500 mb-2" size={20} />
-                        <div className="text-2xl font-black text-white">{totalEvents}</div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Total Events</div>
+                {/* Interactive Stats Section */}
+                <div className="space-y-4">
+                    {/* Expanded Detail View */}
+                    <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 min-h-[160px] flex flex-col justify-center transition-all duration-300">
+                        {activeStat === 'EVENTS' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex items-center gap-2 mb-2 text-purple-400 font-bold uppercase tracking-wider text-xs">
+                                    <Calendar size={14} /> Series Activity
+                                </div>
+                                <div className="flex items-end gap-2 mb-2">
+                                    <h3 className="text-4xl font-black text-white">{totalEvents}</h3>
+                                    <span className="text-xl text-slate-500 font-bold mb-1">Total Events</span>
+                                </div>
+                                <p className="text-slate-400 text-sm">
+                                    {upcoming.length} upcoming sessions scheduled, with {past.length} completed in history.
+                                </p>
+                            </div>
+                        )}
+                        {activeStat === 'REQUESTS' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex items-center gap-2 mb-2 text-blue-400 font-bold uppercase tracking-wider text-xs">
+                                    <Activity size={14} /> Engagement
+                                </div>
+                                <div className="flex items-end gap-2 mb-2">
+                                    <h3 className="text-4xl font-black text-white">{totalRequests}</h3>
+                                    <span className="text-xl text-slate-500 font-bold mb-1">Total Requests</span>
+                                </div>
+                                <p className="text-slate-400 text-sm">
+                                    Averaging {totalEvents > 0 ? Math.round(totalRequests / totalEvents) : 0} requests per event. The audience is highly engaged!
+                                </p>
+                            </div>
+                        )}
+                        {activeStat === 'VIBE' && (
+                            <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+                                <div className="flex items-center gap-2 mb-2 text-pink-400 font-bold uppercase tracking-wider text-xs">
+                                    <Heart size={14} /> Vibe Check
+                                </div>
+                                <div className="flex items-end gap-2 mb-2">
+                                    <h3 className="text-4xl font-black text-white">{topVibe}</h3>
+                                </div>
+                                <p className="text-slate-400 text-sm">
+                                    Based on song selection and voting patterns, this series consistently delivers high energy tracks.
+                                </p>
+                            </div>
+                        )}
                     </div>
-                    <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex flex-col items-center justify-center text-center">
-                        <Activity className="text-blue-500 mb-2" size={20} />
-                        <div className="text-2xl font-black text-white">{totalRequests}</div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">All-Time Req</div>
-                    </div>
-                    <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex flex-col items-center justify-center text-center">
-                        <Heart className="text-pink-500 mb-2" size={20} />
-                        <div className="text-lg font-bold text-white truncate w-full">{topVibe}</div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Top Vibe</div>
-                    </div>
-                    <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-xl flex flex-col items-center justify-center text-center cursor-pointer hover:bg-slate-800 transition group">
-                        <Share2 className="text-green-500 mb-2 group-hover:scale-110 transition" size={20} />
-                        <div className="text-sm font-bold text-white">Share Series</div>
-                        <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Public Page</div>
+
+                    {/* Selector Row */}
+                    <div className="grid grid-cols-3 gap-3">
+                        <button
+                            onClick={() => setActiveStat('EVENTS')}
+                            className={`p-3 rounded-xl border flex flex-col items-center justify-center transition-all ${activeStat === 'EVENTS' ? 'bg-purple-600/20 border-purple-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500 hover:bg-slate-800'}`}
+                        >
+                            <Calendar size={20} className={`mb-1 ${activeStat === 'EVENTS' ? 'text-purple-400' : ''}`} />
+                            <span className="text-[10px] font-bold uppercase">Events</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveStat('REQUESTS')}
+                            className={`p-3 rounded-xl border flex flex-col items-center justify-center transition-all ${activeStat === 'REQUESTS' ? 'bg-blue-600/20 border-blue-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500 hover:bg-slate-800'}`}
+                        >
+                            <Activity size={20} className={`mb-1 ${activeStat === 'REQUESTS' ? 'text-blue-400' : ''}`} />
+                            <span className="text-[10px] font-bold uppercase">Requests</span>
+                        </button>
+                        <button
+                            onClick={() => setActiveStat('VIBE')}
+                            className={`p-3 rounded-xl border flex flex-col items-center justify-center transition-all ${activeStat === 'VIBE' ? 'bg-pink-600/20 border-pink-500 text-white' : 'bg-slate-900 border-slate-800 text-slate-500 hover:bg-slate-800'}`}
+                        >
+                            <Heart size={20} className={`mb-1 ${activeStat === 'VIBE' ? 'text-pink-400' : ''}`} />
+                            <span className="text-[10px] font-bold uppercase">Vibe</span>
+                        </button>
                     </div>
                 </div>
 
@@ -264,6 +336,19 @@ export const EventSeriesPage: React.FC = () => {
                 )}
 
             </div>
-        </div>
+
+
+            {
+                showShareModal && currentSeries && (
+                    <QRCodeModal
+                        title={currentSeries.title}
+                        subtitle="Event Series"
+                        link={`${window.location.origin}/series/${currentSeries.id}`}
+                        logoUrl={currentSeries.posterUrl}
+                        onClose={() => setShowShareModal(false)}
+                    />
+                )
+            }
+        </div >
     );
 };

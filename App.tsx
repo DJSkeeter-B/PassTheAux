@@ -15,6 +15,8 @@ import { BottomNav } from './src/components/BottomNav';
 import { GlobalHeader } from './src/components/GlobalHeader';
 import { ProfilePage } from './src/pages/ProfilePage';
 import { CrateModePage } from './src/pages/CrateModePage';
+import { ExplorePage } from './src/pages/ExplorePage';
+import { VenuePage } from './src/pages/VenuePage';
 
 
 // ... (other imports same)
@@ -72,9 +74,21 @@ const AppLayout = () => {
                     </ProtectedRoute>
                 } />
 
+                <Route path="/explore" element={
+                    <ProtectedRoute>
+                        <ExplorePage />
+                    </ProtectedRoute>
+                } />
+
                 <Route path="/event/:id" element={
                     <ProtectedRoute>
                         <EventDetailsPage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/venue/:id" element={
+                    <ProtectedRoute>
+                        <VenuePage />
                     </ProtectedRoute>
                 } />
 
