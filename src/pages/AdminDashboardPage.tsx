@@ -15,6 +15,7 @@ import { searchVenuesExternal } from '../services/geminiService';
 import { EventModal } from '../components/EventModal';
 import { SettingsModal } from '../components/SettingsModal';
 import { VenueDetailModal } from '../components/VenueDetailModal';
+import { DjApplicationModal } from '../components/DjApplicationModal';
 import { groupEventsByDate } from '../utils/dateUtils';
 
 export const AdminDashboardPage: React.FC = () => {
@@ -27,8 +28,8 @@ export const AdminDashboardPage: React.FC = () => {
 
     const [showEventModal, setShowEventModal] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Partial<Event>>({});
-    const [userSettings, setUserSettings] = useState(false);
-    const [viewingVenue, setViewingVenue] = useState<Venue | null>(null);
+    const [viewingApplication, setViewingApplication] = useState<UserProfile | null>(null);
+    const [archiveStatus, setArchiveStatus] = useState<any>(null);
 
     // Venue state
     const [newVenueName, setNewVenueName] = useState('');
@@ -43,7 +44,6 @@ export const AdminDashboardPage: React.FC = () => {
     const [userSearchTerm, setUserSearchTerm] = useState('');
     const [userSearchResults, setUserSearchResults] = useState<UserProfile[]>([]);
     const [selectedUserForHistory, setSelectedUserForHistory] = useState<UserProfile | null>(null);
-    const [archiveStatus, setArchiveStatus] = useState<any>(null);
 
     useEffect(() => {
         if (user?.role === 'ADMIN') {
@@ -219,7 +219,7 @@ export const AdminDashboardPage: React.FC = () => {
                                                 <button onClick={() => setViewingVenue(notif.data as Venue)} className="text-xs bg-purple-600 px-2 py-1 rounded text-white font-bold">Review</button>
                                             )}
                                             {notif.type === 'DJ_REQUEST' && (
-                                                <button onClick={() => processDjApplication(notif.id, true)} className="text-xs bg-green-600 px-2 py-1 rounded text-white font-bold">Approve</button>
+                                                <button onClick={() => setViewingApplication(notif.data as UserProfile)} className="text-xs bg-blue-600 hover:bg-blue-500 px-2 py-1 rounded text-white font-bold">Review Application</button>
                                             )}
                                             {notif.type === 'DELETION_REQUEST' && (
                                                 <button onClick={() => {
@@ -513,8 +513,7 @@ export const AdminDashboardPage: React.FC = () => {
                                         <span className="text-sm font-bold text-white">{dj.name}</span>
                                     </div>
                                     <div className="flex gap-1">
-                                        <button onClick={() => processDjApplication(dj.id, true)} className="px-2 py-1 bg-green-600 text-white text-xs rounded font-bold">Approve</button>
-                                        <button onClick={() => processDjApplication(dj.id, false)} className="px-2 py-1 bg-slate-700 text-white text-xs rounded font-bold">Deny</button>
+                                        <button onClick={() => setViewingApplication(dj)} className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white text-xs rounded font-bold">Review Application</button>
                                     </div>
                                 </div>
                             ))}
@@ -537,6 +536,9 @@ export const AdminDashboardPage: React.FC = () => {
                                     <span className={`text-xs font-medium ${dj.isActive !== false ? 'text-slate-300' : 'text-red-400/50 line-through'}`}>
                                         @{dj.username}
                                     </span>
+                                    <button onClick={() => setViewingApplication(dj)} className="ml-1 p-1 bg-slate-800 hover:bg-slate-700 rounded text-slate-400 hover:text-white transition" title="View Profile">
+                                        <Headphones size={12} />
+                                    </button>
                                 </div>
                             ))}
                         </div>
@@ -794,6 +796,17 @@ export const AdminDashboardPage: React.FC = () => {
                         onClose={() => setShowEventModal(false)}
                         currentUserId={user?.id}
                         series={mySeries}
+                    />
+                )
+            }
+            {
+                viewingApplication && (
+                    <DjApplicationModal
+                        user={viewingApplication}
+                        isOpen={!!viewingApplication}
+                        onClose={() => setViewingApplication(null)}
+                        isReviewMode={true}
+                        adminMode={true}
                     />
                 )
             }

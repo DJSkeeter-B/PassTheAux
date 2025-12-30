@@ -438,12 +438,13 @@ export const getEventSetlist = async (eventId: string): Promise<Song[]> => {
 
 // --- DJ APPLICATIONS ---
 
-export const submitDjApplication = async (userId: string, bio: string, socialLinks: SocialLink[]) => {
+export const submitDjApplication = async (userId: string, bio: string, socialLinks: SocialLink[], vibes: string[]) => {
   const userRef = doc(db, "users", userId);
   await updateDoc(userRef, sanitizeData({
     djStatus: 'PENDING',
     bio,
     socialLinks,
+    vibes,
     appliedAt: serverTimestamp()
   }));
 };

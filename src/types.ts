@@ -37,6 +37,7 @@ export interface UserProfile {
   isActive?: boolean;
   lexiconConfig?: LexiconConfig;
   lexiconConnectionEnabled?: boolean; // Integration Feature
+  vibes?: string[];
 }
 
 export interface Series {
