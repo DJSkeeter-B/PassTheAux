@@ -40,6 +40,12 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
     const [weekOfMonth, setWeekOfMonth] = useState(1); // Default 1st
     const [autoCreate, setAutoCreate] = useState(false);
 
+    // TEMPLATE STATE
+    const [defaultStartTime, setDefaultStartTime] = useState('22:00');
+    const [defaultEndTime, setDefaultEndTime] = useState('02:00');
+    const [defaultVibes, setDefaultVibes] = useState<string[]>([]);
+    const [vibeInput, setVibeInput] = useState('');
+
 
     // Manual Venue Request State
     const [showManualVenueForm, setShowManualVenueForm] = useState(false);
@@ -132,6 +138,20 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
         setVenueSearchTerm('');
     };
 
+    // --- TEMPLATE HANDLERS ---
+    const addVibe = () => {
+        if (!vibeInput.trim()) return;
+        if (!defaultVibes.includes(vibeInput.trim())) {
+            setDefaultVibes([...defaultVibes, vibeInput.trim()]);
+        }
+        setVibeInput('');
+    }
+
+    const removeVibe = (v: string) => {
+        setDefaultVibes(defaultVibes.filter(item => item !== v));
+    }
+
+
     const handleManualVenueSubmit = async () => {
         if (!manualVenueData.name || !manualVenueData.address) {
             alert("Venue Name and Address are required.");
@@ -203,7 +223,11 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
                 frequency: isRecurring ? frequency : undefined,
                 dayOfWeek: isRecurring ? dayOfWeek : undefined,
                 weekOfMonth: isRecurring && frequency === 'MONTHLY' ? weekOfMonth : undefined,
-                autoCreate: isRecurring ? autoCreate : undefined
+                autoCreate: isRecurring ? autoCreate : undefined,
+                // Template Data
+                defaultStartTime,
+                defaultEndTime,
+                defaultVibes
             });
 
             if (onSeriesCreated) onSeriesCreated(newSeriesId);
@@ -529,6 +553,55 @@ export const SeriesModal: React.FC<SeriesModalProps> = ({ onClose, currentUserId
                                             ))}
                                         </div>
                                     )}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* TEMPLATE SETTINGS SECTION */}
+                        <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-3">
+                            <h4 className="text-xs font-bold text-slate-400 uppercase">Event Defaults (Template)</h4>
+
+                            {/* Time Defaults */}
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-[10px] text-slate-500 block mb-1">Default Start Time</label>
+                                    <input
+                                        type="time"
+                                        value={defaultStartTime}
+                                        onChange={e => setDefaultStartTime(e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] text-slate-500 block mb-1">Default End Time</label>
+                                    <input
+                                        type="time"
+                                        value={defaultEndTime}
+                                        onChange={e => setDefaultEndTime(e.target.value)}
+                                        className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Vibe Defaults */}
+                            <div>
+                                <label className="text-[10px] text-slate-500 block mb-1">Default Vibes</label>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {defaultVibes.map(v => (
+                                        <span key={v} onClick={() => removeVibe(v)} className="bg-slate-800 text-slate-300 border border-slate-600 px-2 py-0.5 rounded text-[10px] cursor-pointer hover:bg-red-900/50 hover:text-red-400 flex items-center gap-1">
+                                            {v} <X size={10} />
+                                        </span>
+                                    ))}
+                                </div>
+                                <div className="flex gap-1">
+                                    <input
+                                        className="flex-1 bg-slate-900 border border-slate-700 rounded p-1 text-xs text-white"
+                                        placeholder="Add vibe (e.g. House, Chill)..."
+                                        value={vibeInput}
+                                        onChange={e => setVibeInput(e.target.value)}
+                                        onKeyDown={e => e.key === 'Enter' && addVibe()}
+                                    />
+                                    <button onClick={addVibe} className="bg-slate-800 text-white px-2 rounded hover:bg-slate-700"><Plus size={14} /></button>
                                 </div>
                             </div>
                         </div>

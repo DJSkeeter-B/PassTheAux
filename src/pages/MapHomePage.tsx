@@ -92,7 +92,21 @@ export const MapHomePage: React.FC = () => {
     const todayStr = new Date().toLocaleDateString('en-CA');
     const activeEvents = useMemo(() => {
         return events
-            .filter(e => !e.isArchived && e.date >= todayStr)
+            .filter(e => {
+                if (e.isArchived) return false;
+                if (e.date < todayStr) return false;
+
+                // VISIBILITY RULE: Venue must be APPROVED
+                let isApproved = false;
+                if (e.venueId) {
+                    const v = venues.find(v => v.id === e.venueId);
+                    if (v && v.status === 'APPROVED') isApproved = true;
+                } else if (e.venueName) {
+                    const v = venues.find(v => v.name.toLowerCase() === e.venueName.toLowerCase());
+                    if (v && v.status === 'APPROVED') isApproved = true;
+                }
+                return isApproved;
+            })
             .sort((a, b) => {
                 const dateA = new Date(`${a.date}T${a.startTime}`);
                 const dateB = new Date(`${b.date}T${b.startTime}`);
@@ -430,9 +444,6 @@ export const MapHomePage: React.FC = () => {
                                         <EventCard
                                             event={item.data}
                                             userCheckedInEventId={user?.checkedInEventId}
-                                            onCardClick={() => {
-                                                if (item.data.venueId) setSelectedVenueIds([item.data.venueId]);
-                                            }}
                                         />
                                     </div>
                                 );

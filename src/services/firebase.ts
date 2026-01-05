@@ -18,7 +18,8 @@ import {
   EmailAuthProvider,
   reauthenticateWithCredential,
   reauthenticateWithPopup,
-  sendPasswordResetEmail
+  sendPasswordResetEmail,
+  linkWithCredential
 } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, auth, storage } from "../../firebaseConfig";
@@ -246,9 +247,42 @@ export const signInWithGoogle = async (): Promise<UserProfile> => {
     }
 
     return profile;
+    return profile;
   } catch (error) {
     console.error("Google Sign-In Error:", error);
     throw error;
+  }
+};
+
+export const upgradeAnonymousToEmail = async (email: string, pass: string, name: string): Promise<UserProfile> => {
+  if (!auth.currentUser || !auth.currentUser.isAnonymous) {
+    throw new Error("No anonymous user to upgrade");
+  }
+
+  try {
+    const credential = EmailAuthProvider.credential(email, pass);
+    const result = await linkWithCredential(auth.currentUser, credential);
+    await updateProfile(result.user, { displayName: name });
+
+    const username = email.split('@')[0];
+    const profile: UserProfile = {
+      id: result.user.uid,
+      name: name,
+      username: username,
+      role: 'LISTENER',
+      isAuthenticated: true,
+      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${username}`,
+      djStatus: 'NONE',
+      isAnonymous: false
+    };
+
+    await syncUserToFirestore(profile);
+    return profile;
+  } catch (e: any) {
+    console.error("Upgrade Failed:", e);
+    // Handle "email-already-in-use" - this technically requires "Login and Merge", which is complex.
+    // For now, let the UI handle the error (e.g., prompt to login).
+    throw e;
   }
 };
 
@@ -842,6 +876,47 @@ export const updateVenue = async (venueId: string, data: Partial<Venue>) => {
 
 export const deleteVenue = async (venueId: string) => {
   await deleteDoc(doc(db, "venues", venueId));
+};
+
+export const mergeVenues = async (pendingVenueId: string, targetVenueId: string) => {
+  // 1. Get Target Venue Details (for name update in events)
+  const targetSnap = await getDoc(doc(db, 'venues', targetVenueId));
+  if (!targetSnap.exists()) throw new Error("Target venue does not exist");
+  const targetVenue = targetSnap.data() as Venue;
+
+  // 2. Reassign Events
+  const eventsQuery = query(collection(db, "events"), where("venueId", "==", pendingVenueId));
+  const eventsSnap = await getDocs(eventsQuery);
+  const eventPromises = eventsSnap.docs.map(d => updateDoc(d.ref, {
+    venueId: targetVenueId,
+    venueName: targetVenue.name,
+    venue: { ...targetVenue, id: targetVenueId } // Update snapshot if exists
+  }));
+  await Promise.all(eventPromises);
+
+  // 3. Reassign Series
+  const seriesQuery = query(collection(db, "series"), where("venueId", "==", pendingVenueId));
+  const seriesSnap = await getDocs(seriesQuery);
+  const seriesPromises = seriesSnap.docs.map(d => updateDoc(d.ref, {
+    venueId: targetVenueId
+  }));
+  await Promise.all(seriesPromises);
+
+  // 4. Delete Pending Venue
+  await deleteDoc(doc(db, "venues", pendingVenueId));
+
+  return { eventsMoved: eventsSnap.size, seriesMoved: seriesSnap.size };
+};
+
+export const searchVenues = async (term: string): Promise<Venue[]> => {
+  if (term.length < 2) return [];
+  // Simple prefix search (case-sensitive usually in Firestore unless handled)
+  // For robustness we often just fetch all approved and filter client side if dataset is small (<500 venues).
+  // Assuming small scale for now:
+  const q = query(collection(db, "venues"), where("status", "==", "APPROVED"));
+  const snap = await getDocs(q);
+  const all = snap.docs.map(d => ({ ...d.data(), id: d.id } as Venue));
+  return all.filter(v => v.name.toLowerCase().includes(term.toLowerCase()));
 };
 
 // --- SYSTEM SETTINGS (Global Config) ---

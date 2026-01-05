@@ -21,16 +21,42 @@ import { VenuePage } from './src/pages/VenuePage';
 
 // ... (other imports same)
 
+import { isAdmin } from './src/utils/adminUtils';
+
 /*
     Route Guard Component
 */
-const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles?: string[] }) => {
-    const { user, loading } = useAuth();
+const ProtectedRoute = ({ children, allowedRoles, allowGuest }: { children: JSX.Element, allowedRoles?: string[], allowGuest?: boolean }) => {
+    const { user, loading, loginAnonymously } = useAuth();
+
+    // Auto-Login Guest if permitted
+    React.useEffect(() => {
+        if (!loading && !user && allowGuest) {
+            loginAnonymously();
+        }
+    }, [user, loading, allowGuest]);
+
     if (loading) return <div className="p-10 text-white">Loading...</div>;
-    if (!user) return <Navigate to="/login" replace />;
-    if (allowedRoles && !allowedRoles.includes(user.role)) {
-        return <Navigate to="/" replace />;
+
+    // If waiting for guest login
+    if (!user && allowGuest) {
+        return <div className="p-10 text-white flex flex-col items-center justify-center">
+            <div className="animate-spin h-8 w-8 border-4 border-purple-500 rounded-full border-t-transparent mb-4"></div>
+            <p>Entering as Guest...</p>
+        </div>;
     }
+
+    if (!user) return <Navigate to="/login" replace />;
+
+    if (allowedRoles) {
+        const hasPermission = allowedRoles.some(role => {
+            if (role === 'ADMIN') return isAdmin(user);
+            return user.role === role;
+        });
+
+        if (!hasPermission) return <Navigate to="/" replace />;
+    }
+
     return children;
 };
 // ... (ProtectedRoute same)
@@ -81,7 +107,7 @@ const AppLayout = () => {
                 } />
 
                 <Route path="/event/:id" element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowGuest>
                         <EventDetailsPage />
                     </ProtectedRoute>
                 } />
@@ -93,13 +119,13 @@ const AppLayout = () => {
                 } />
 
                 <Route path="/event/:id/queue" element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowGuest>
                         <EventQueuePage />
                     </ProtectedRoute>
                 } />
 
                 <Route path="/event/:id/search" element={
-                    <ProtectedRoute>
+                    <ProtectedRoute allowGuest>
                         <EventSearchPage />
                     </ProtectedRoute>
                 } />

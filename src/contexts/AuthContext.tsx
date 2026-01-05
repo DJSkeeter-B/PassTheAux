@@ -7,12 +7,14 @@ interface AuthContextType {
     user: UserProfile | null;
     loading: boolean;
     logout: () => Promise<void>;
+    loginAnonymously: (name?: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
     user: null,
     loading: true,
     logout: async () => { },
+    loginAnonymously: async () => { },
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -50,8 +52,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await logout();
     };
 
+    const handleLoginAnonymously = async (name?: string) => {
+        try {
+            await import('../services/firebase').then(m => m.loginListener(name || 'Guest'));
+        } catch (error) {
+            console.error("Anon login failed", error);
+        }
+    };
+
     return (
-        <AuthContext.Provider value={{ user, loading, logout: handleLogout }}>
+        <AuthContext.Provider value={{ user, loading, logout: handleLogout, loginAnonymously: handleLoginAnonymously }}>
             {children}
         </AuthContext.Provider>
     );

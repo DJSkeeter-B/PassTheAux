@@ -49,6 +49,11 @@ export interface Series {
   djName?: string; // Cache for display
   venueId?: string; // Phase 7
   posterUrl?: string; // Phase 7
+  // Series Templating
+  defaultVibes?: string[]; // Vibe Tags to autofill
+  defaultStartTime?: string;
+  defaultEndTime?: string;
+  defaultCoverUrl?: string; // Phase 8: Specific cover for series if different from poster
   // Recurrence Config
   isRecurring?: boolean;
   frequency?: 'WEEKLY' | 'MONTHLY';
@@ -62,6 +67,7 @@ export interface Event {
   id: string;
   ownerId: string;
   seriesId?: string;
+  useSeriesTitle?: boolean; // If true, use Series.title instead of this.title
   title: string;
   venueName: string;
   venueId?: string; // Link to Venue Doc
@@ -85,7 +91,11 @@ export interface Event {
   isPublic?: boolean;
   customQrImageUrl?: string;
   seriesOrder?: number;
+  // Recurrence
   allowRepeats?: boolean; // Phase 8: If true, previously played songs can be requested again
+  isRecurringInstance?: boolean; // Icon indicator
+  recurrenceRule?: string; // Optional: Override series rule
+
   requestsPausedUntil?: number; // Timestamp for when requests automatically turn back on
   searchSources?: ('SPOTIFY' | 'LEXICON')[]; // Which services to search
   lexiconPlaylistIds?: string[]; // If using Lexicon, limit to these playlists

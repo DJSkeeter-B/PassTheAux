@@ -17,6 +17,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { VenueDetailModal } from '../components/VenueDetailModal';
 import { DjApplicationModal } from '../components/DjApplicationModal';
 import { groupEventsByDate } from '../utils/dateUtils';
+import { isAdmin, isSuperAdmin } from '../utils/adminUtils';
 
 export const AdminDashboardPage: React.FC = () => {
     const { user, logout } = useAuth();
@@ -30,6 +31,8 @@ export const AdminDashboardPage: React.FC = () => {
     const [editingEvent, setEditingEvent] = useState<Partial<Event>>({});
     const [viewingApplication, setViewingApplication] = useState<UserProfile | null>(null);
     const [archiveStatus, setArchiveStatus] = useState<any>(null);
+    const [viewingVenue, setViewingVenue] = useState<Venue | null>(null);
+    const [userSettings, setUserSettings] = useState(false);
 
     // Venue state
     const [newVenueName, setNewVenueName] = useState('');
@@ -46,7 +49,7 @@ export const AdminDashboardPage: React.FC = () => {
     const [selectedUserForHistory, setSelectedUserForHistory] = useState<UserProfile | null>(null);
 
     useEffect(() => {
-        if (user?.role === 'ADMIN') {
+        if (isAdmin(user)) {
             const unsubRequests = subscribeToDjRequests(setPendingDjs);
             const unsubAll = subscribeToAllDjs(setAllDjs);
             const unsubDel = subscribeToDeletionRequests(setDeletionRequests);
@@ -56,10 +59,10 @@ export const AdminDashboardPage: React.FC = () => {
                 unsubDel();
             }
         }
-    }, [user?.role]);
+    }, [user]);
 
     useEffect(() => {
-        if (user?.role === 'ADMIN') {
+        if (isAdmin(user)) {
             return subscribeToAllSeries(setMySeries);
         } else if (user?.id) {
             return subscribeToSeries(user.id, setMySeries);
@@ -89,7 +92,9 @@ export const AdminDashboardPage: React.FC = () => {
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                     <h2 className="text-2xl font-bold text-white">Admin Dashboard</h2>
-                    <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded font-bold">SUPERUSER</span>
+                    {isSuperAdmin(user) && (
+                        <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs rounded font-bold">SUPERUSER</span>
+                    )}
                 </div>
                 <button
                     onClick={() => setUserSettings(true)}
@@ -110,6 +115,9 @@ export const AdminDashboardPage: React.FC = () => {
             {/* NOTIFICATIONS SECTION */}
             <section className="mb-6">
                 {(() => {
+                    // 0. SYSTEM ALERTS (Role Mismatch)
+                    const roleMismatch = user && isAdmin(user) && user.role !== 'ADMIN';
+
                     // 1. Venue Requests (Ready for Approval)
                     const venueRequests = venues.filter(v => v.status === 'PENDING' && v.name && v.address && v.description).map(v => ({
                         type: 'VENUE_REQUEST',
@@ -193,6 +201,16 @@ export const AdminDashboardPage: React.FC = () => {
 
                     const allNotifications = [...venueRequests, ...incompleteVenues, ...djRequests, ...delRequests, ...eventAlerts, ...venueAlerts, ...newEvents, ...newSeriesList];
 
+                    if (roleMismatch) {
+                        allNotifications.unshift({
+                            type: 'SYSTEM_ALERT',
+                            id: 'role-mismatch',
+                            title: 'Role Mismatch Detected',
+                            subtitle: `Your DB Role is '${user?.role}' but you are a Super Admin. Write ops will fail.`,
+                            data: null
+                        } as any);
+                    }
+
                     if (allNotifications.length === 0) return null;
 
                     return (
@@ -205,10 +223,11 @@ export const AdminDashboardPage: React.FC = () => {
                                     <div key={`${notif.type}-${notif.id}-${idx}`} className="bg-slate-900 border border-slate-800 p-3 rounded-lg flex items-center justify-between shadow-sm hover:border-purple-500/30 transition group">
                                         <div className="flex flex-col">
                                             <div className="flex items-center gap-2">
+                                                {notif.type === 'SYSTEM_ALERT' && <AlertTriangle size={14} className="text-red-500 animate-pulse" />}
                                                 {notif.type === 'MISSING_INFO' && <AlertTriangle size={14} className="text-yellow-500" />}
                                                 {notif.type === 'DELETION_REQUEST' && <Trash2 size={14} className="text-red-500" />}
                                                 {(notif.type === 'VENUE_REQUEST' || notif.type === 'DJ_REQUEST') && <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>}
-                                                <span className="font-bold text-white text-sm">{notif.title}</span>
+                                                <span className={`font-bold text-sm ${notif.type === 'SYSTEM_ALERT' ? 'text-red-400' : 'text-white'}`}>{notif.title}</span>
                                             </div>
                                             <span className="text-xs text-slate-500 ml-6">{notif.subtitle}</span>
                                         </div>
@@ -273,8 +292,15 @@ export const AdminDashboardPage: React.FC = () => {
                                                         Jump
                                                     </button>
                                                     <button
-                                                        onClick={async () => {
-                                                            await markAsViewed(notif.type === 'NEW_EVENT' ? 'events' : 'series', notif.id);
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation(); // Prevent any parent clicks
+                                                            try {
+                                                                console.log(`Dismissing ${notif.type} ${notif.id}`);
+                                                                await markAsViewed(notif.type === 'NEW_EVENT' ? 'events' : 'series', notif.id);
+                                                            } catch (err: any) {
+                                                                console.error("Dismiss failed", err);
+                                                                alert(`Failed to dismiss: ${err.message}`);
+                                                            }
                                                         }}
                                                         title="Dismiss"
                                                         className="p-1 text-slate-500 hover:text-white"

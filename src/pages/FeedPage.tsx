@@ -7,6 +7,7 @@ import { useData } from '../contexts/DataContext';
 import { EventCard } from '../components/EventCard';
 import { Event } from '../types';
 import { EventModal } from '../components/EventModal';
+import { isAdmin } from '../utils/adminUtils';
 
 export const FeedPage: React.FC = () => {
     const { user } = useAuth();
@@ -24,19 +25,24 @@ export const FeedPage: React.FC = () => {
     const today = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
 
     // Helper: Is Valid Venue?
+    // Helper: Is Valid Venue? (Strict Public Visibility Rule)
     const isVenueApproved = (evt: Event) => {
-        // If specific ID linked, check it
+        // 1. Try by ID
         if (evt.venueId) {
             const v = venues.find(v => v.id === evt.venueId);
-            return v ? v.status === 'APPROVED' : true; // If ID exists but not found? Assume true/legacy or deleted. Strict would be false. Let's assume true to avoid breaking legacy unless explicitly pending.
-            // Wait, if it IS found and PENDING, return false.
+            return v ? v.status === 'APPROVED' : false; // If ID exists but venue doesn't, data is stale/invalid -> hide.
         }
-        // Fallback: Check by Name
+        // 2. Try by Name
         if (evt.venueName) {
             const v = venues.find(v => v.name.toLowerCase() === evt.venueName.toLowerCase());
-            if (v && v.status === 'PENDING') return false;
+            // If venue object exists, strict check status
+            if (v) return v.status === 'APPROVED';
         }
-        return true;
+        // 3. No Venue Link found?
+        // If it has a name string but no DB match, it's likely a legacy event or ad-hoc. 
+        // Strict interpretation: "unless it has... an approved venue". 
+        // This implies it MUST lie in the approved venues list.
+        return false;
     };
 
     // 1. "Happening Tonight"
@@ -164,17 +170,17 @@ export const FeedPage: React.FC = () => {
                     </div>
 
                     {/* Logic for Message & Action */}
-                    {(user?.role === 'DJ' || user?.role === 'ADMIN') ? (
+                    {(user?.role === 'DJ' || isAdmin(user)) ? (
                         <>
                             <h3 className="text-lg font-bold text-white mb-2">Oh no! No upcoming events!</h3>
                             <p className="text-slate-400 mb-6">It's too quiet in here. Get the party started!</p>
 
                             <button
-                                onClick={() => navigate(user.role === 'ADMIN' ? '/admin' : '/dj')}
+                                onClick={() => navigate(isAdmin(user) ? '/admin' : '/dj')}
                                 className="bg-gradient-to-r from-purple-600 to-blue-600 hover:opacity-90 text-white font-bold py-3 px-6 rounded-xl flex items-center gap-2 mx-auto transition shadow-lg shadow-purple-900/20"
                             >
                                 <PlusCircle size={20} />
-                                {user.role === 'ADMIN' ? 'Go to Admin Dashboard' : 'Go to DJ Hub'}
+                                {isAdmin(user) ? 'Go to Admin Dashboard' : 'Go to DJ Hub'}
                             </button>
                         </>
                     ) : (
