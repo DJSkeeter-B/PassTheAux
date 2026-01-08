@@ -17,6 +17,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { VenueDetailModal } from '../components/VenueDetailModal';
 import { DjApplicationModal } from '../components/DjApplicationModal';
 import { groupEventsByDate } from '../utils/dateUtils';
+import { isAdmin } from '../utils/adminUtils';
 
 export const AdminDashboardPage: React.FC = () => {
     const { user, logout } = useAuth();
@@ -50,7 +51,7 @@ export const AdminDashboardPage: React.FC = () => {
     const [selectedUserForHistory, setSelectedUserForHistory] = useState<UserProfile | null>(null);
 
     useEffect(() => {
-        if (user?.role === 'ADMIN') {
+        if (isAdmin(user)) {
             const unsubRequests = subscribeToDjRequests(setPendingDjs);
             const unsubAll = subscribeToAllDjs(setAllDjs);
             const unsubDel = subscribeToDeletionRequests(setDeletionRequests);
@@ -60,10 +61,10 @@ export const AdminDashboardPage: React.FC = () => {
                 unsubDel();
             }
         }
-    }, [user?.role]);
+    }, [user]);
 
     useEffect(() => {
-        if (user?.role === 'ADMIN') {
+        if (isAdmin(user)) {
             return subscribeToAllSeries(setMySeries);
         } else if (user?.id) {
             return subscribeToSeries(user.id, setMySeries);
