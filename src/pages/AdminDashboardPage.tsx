@@ -31,6 +31,10 @@ export const AdminDashboardPage: React.FC = () => {
     const [viewingApplication, setViewingApplication] = useState<UserProfile | null>(null);
     const [archiveStatus, setArchiveStatus] = useState<any>(null);
 
+    // Missing State Definitions
+    const [userSettings, setUserSettings] = useState(false);
+    const [viewingVenue, setViewingVenue] = useState<Venue | null>(null);
+
     // Venue state
     const [newVenueName, setNewVenueName] = useState('');
     const [venueSearchResults, setVenueSearchResults] = useState<{ name: string, address: string, latitude: number, longitude: number }[]>([]);
@@ -389,7 +393,7 @@ export const AdminDashboardPage: React.FC = () => {
                                     <div className="text-xs text-slate-500 flex items-center gap-2">
                                         <span className="text-purple-400">{series.frequency}</span>
                                         <span>•</span>
-                                        <span>Owned by {series.ownerId.substring(0, 6)}...</span>
+                                        <span>Owned by {series.ownerId ? series.ownerId.substring(0, 6) : 'Unknown'}...</span>
                                     </div>
                                 </div>
                                 <div className="text-slate-600">
