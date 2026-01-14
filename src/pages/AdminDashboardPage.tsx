@@ -320,7 +320,12 @@ const AdminDashboardContent: React.FC = () => {
                                                     </button>
                                                     <button
                                                         onClick={async () => {
-                                                            await markAsViewed(notif.type === 'NEW_EVENT' ? 'events' : 'series', notif.id);
+                                                            try {
+                                                                await markAsViewed(notif.type === 'NEW_EVENT' ? 'events' : 'series', notif.id);
+                                                            } catch (e: any) {
+                                                                console.error("Dismissal failed", e);
+                                                                alert(`Failed to dismiss: ${e.message || "Unknown error"}`);
+                                                            }
                                                         }}
                                                         title="Dismiss"
                                                         className="p-1 text-slate-500 hover:text-white"
