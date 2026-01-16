@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { subscribeToAllDjs } from '../services/firebase';
 import { UserProfile } from '../types';
@@ -9,10 +9,11 @@ type ExploreTab = 'EVENTS' | 'SERIES' | 'DJS' | 'VENUES';
 
 export const ExplorePage: React.FC = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const { events, series, venues, loading: dataLoading } = useData();
     const [djs, setDjs] = useState<UserProfile[]>([]);
     const [loadingDjs, setLoadingDjs] = useState(true);
-    const [activeTab, setActiveTab] = useState<ExploreTab>('EVENTS');
+    const [activeTab, setActiveTab] = useState<ExploreTab>((location.state as any)?.tab || 'EVENTS');
     const [searchTerm, setSearchTerm] = useState('');
 
     useEffect(() => {
@@ -77,7 +78,7 @@ export const ExplorePage: React.FC = () => {
                         {upcoming.length > 0 ? upcoming.map((item) => (
                             <div
                                 key={item.id}
-                                onClick={() => navigate(`/event/${item.id}`)}
+                                onClick={() => navigate(`/event/${item.id}`, { state: { from: 'explore', tab: 'EVENTS' } })}
                                 className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex gap-4 cursor-pointer hover:border-purple-500/50 transition group"
                             >
                                 <div className="w-16 h-16 bg-slate-800 rounded-lg shrink-0 overflow-hidden">
@@ -110,7 +111,7 @@ export const ExplorePage: React.FC = () => {
                             {past.map((item) => (
                                 <div
                                     key={item.id}
-                                    onClick={() => navigate(`/event/${item.id}`)}
+                                    onClick={() => navigate(`/event/${item.id}`, { state: { from: 'explore', tab: 'EVENTS' } })}
                                     className="bg-slate-900/50 border border-slate-800/50 rounded-xl p-4 flex gap-4 cursor-pointer hover:bg-slate-900 transition group"
                                 >
                                     <div className="w-16 h-16 bg-slate-800 rounded-lg shrink-0 overflow-hidden grayscale opacity-70 group-hover:grayscale-0 group-hover:opacity-100 transition">
@@ -139,7 +140,7 @@ export const ExplorePage: React.FC = () => {
             {filteredData.map((item: any) => (
                 <div
                     key={item.id}
-                    onClick={() => navigate(`/series/${item.id}`)}
+                    onClick={() => navigate(`/series/${item.id}`, { state: { from: 'explore', tab: 'SERIES' } })}
                     className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden cursor-pointer hover:border-blue-500/50 transition group"
                 >
                     <div className="h-32 bg-slate-800 relative">
@@ -186,7 +187,7 @@ export const ExplorePage: React.FC = () => {
             {filteredData.map((item: any) => (
                 <div
                     key={item.id}
-                    onClick={() => navigate(`/venue/${item.id}`)}
+                    onClick={() => navigate(`/venue/${item.id}`, { state: { from: 'explore', tab: 'VENUES' } })}
                     className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex items-center justify-between cursor-pointer hover:border-green-500/50 transition group"
                 >
                     <div>

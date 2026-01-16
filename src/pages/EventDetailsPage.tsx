@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, MapPin, QrCode, BookOpen, Headphones, Layers } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -32,6 +32,7 @@ export const EventDetailsPage: React.FC = () => {
     // ... params ...
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
     const { events, loading } = useData();
     const [series, setSeries] = useState<Series | null>(null);
@@ -149,7 +150,13 @@ export const EventDetailsPage: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent"></div>
 
                 <button
-                    onClick={() => navigate('/')}
+                    onClick={() => {
+                        if ((location.state as any)?.from === 'explore') {
+                            navigate('/explore', { state: { tab: (location.state as any)?.tab } });
+                        } else {
+                            navigate('/');
+                        }
+                    }}
                     className="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur rounded-full text-white hover:bg-black/60 transition"
                 >
                     <ArrowLeft size={24} />
@@ -214,7 +221,7 @@ export const EventDetailsPage: React.FC = () => {
 
             <div className="px-4 space-y-6">
                 {series && (
-                    <div onClick={() => navigate(`/series/${series.id}`)} className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg flex items-center justify-between cursor-pointer hover:bg-blue-900/30 transition">
+                    <div onClick={() => navigate(`/series/${series.id}`, { state: (location.state as any) })} className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg flex items-center justify-between cursor-pointer hover:bg-blue-900/30 transition">
                         <div className="flex items-center gap-2 text-blue-400">
                             <BookOpen size={16} />
                             <span className="text-xs font-bold uppercase tracking-wide">Part of Series: {series.title}</span>

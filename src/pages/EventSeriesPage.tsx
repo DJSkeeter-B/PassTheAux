@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Calendar, MapPin, Music, ArrowLeft, ChevronDown, Clock, Activity, Heart, Share2 } from 'lucide-react';
@@ -11,6 +11,7 @@ import { QRCodeModal } from '../components/QRCodeModal';
 export const EventSeriesPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { series, events, venues } = useData();
     const { user } = useAuth();
 
@@ -97,7 +98,13 @@ export const EventSeriesPage: React.FC = () => {
                 {/* Top Header Bar */}
                 <div className="absolute top-0 left-0 right-0 z-30 p-4 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent">
                     <button
-                        onClick={() => navigate('/dj')}
+                        onClick={() => {
+                            if ((location.state as any)?.from === 'explore') {
+                                navigate('/explore', { state: { tab: (location.state as any)?.tab } });
+                            } else {
+                                navigate('/dj');
+                            }
+                        }}
                         className="p-2 bg-black/40 backdrop-blur-md rounded-full text-white hover:bg-black/60 transition"
                     >
                         <ArrowLeft size={20} />
