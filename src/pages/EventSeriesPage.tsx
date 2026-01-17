@@ -37,12 +37,26 @@ export const EventSeriesPage: React.FC = () => {
         : null;
 
     // Filter events for this series
+    // Filter events for this series
     const seriesEvents = useMemo(() => {
         if (!id) return [];
         return events
-            .filter(e => e.seriesId === id)
+            .filter(e => {
+                if (e.seriesId !== id) return false;
+
+                // VISIBILITY RULE: Venue must be APPROVED
+                let isApproved = false;
+                if (e.venueId) {
+                    const v = venues.find(v => v.id === e.venueId);
+                    if (v && v.status === 'APPROVED') isApproved = true;
+                } else if (e.venueName) {
+                    const v = venues.find(v => v.name.toLowerCase() === e.venueName.toLowerCase());
+                    if (v && v.status === 'APPROVED') isApproved = true;
+                }
+                return isApproved;
+            })
             .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    }, [events, id]);
+    }, [events, id, venues]);
 
     // Split into Upcoming and Past
     const { upcoming, past } = useMemo(() => {

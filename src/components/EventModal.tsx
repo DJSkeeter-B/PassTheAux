@@ -3,7 +3,7 @@ import { Event, Series, Venue } from '../types';
 import { Plus, MapPin, Shuffle, X as XIcon, Calendar, ArrowLeft, Check, Music, CornerDownRight } from 'lucide-react';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
-import { updateEvent, createEvent, uploadEventImage, searchUsers, searchDjs, createVenue, updateEventAsAdmin, subscribeToUserProfile, addVibeTag } from '../services/firebase';
+import { updateEvent, createEvent, uploadEventImage, searchUsers, searchDjs, createVenue, updateEventAsAdmin, subscribeToUserProfile, addVibeTag, deleteEvent } from '../services/firebase';
 import { searchVenuesExternal, getCoordinatesFromLocation } from '../services/geminiService';
 import { getLexiconPlaylists } from '../services/lexiconService';
 import { UserProfile } from '../types';
@@ -34,6 +34,9 @@ const TimePicker12h = ({ value, onChange }: { value: string, onChange: (val: str
     const parseTime = (val: string) => {
         if (!val) return { h: '10', m: '00', p: 'PM' };
         const [h24, m] = val.split(':').map(Number);
+        // Safety check for invalid parse
+        if (isNaN(h24)) return { h: '10', m: '00', p: 'PM' };
+
         const p = h24 >= 12 ? 'PM' : 'AM';
         const h = h24 % 12 || 12;
         return {
@@ -95,7 +98,7 @@ const TimePicker12h = ({ value, onChange }: { value: string, onChange: (val: str
 };
 
 export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditingEvent, onClose, currentUserId, series = [], onSave }) => {
-    const { venues, config } = useData(); // Context access
+    const { venues, config, events } = useData(); // Context access
     const { user } = useAuth();
     const [imageUploadProgress, setImageUploadProgress] = useState(false);
     const [venueSearchResults, setVenueSearchResults] = useState<{ name: string, address: string, latitude: number, longitude: number }[]>([]);
@@ -212,25 +215,28 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                 try {
                     const termLower = venueSearchTerm.toLowerCase();
 
-                    // 1. Local Search (Approved & Pending)
+                    // 1. Local Search (Include ALL local matches to prevent "missing venue" confusion)
+                    // If status is weird/missing, valid venues might be hidden. Better to show them.
                     const localMatches = venues.filter(v =>
                         v.name.toLowerCase().includes(termLower) ||
                         (v.address && v.address.toLowerCase().includes(termLower))
                     );
 
-                    const approved = localMatches.filter(v => v.status === 'APPROVED');
-                    const pending = localMatches.filter(v => v.status === 'PENDING');
-
                     // 2. External Search
                     const externalResults = await searchVenuesExternal(venueSearchTerm);
 
                     // Filter out external that match local names to avoid duplicates
-                    const newExternal = externalResults.filter(ext => !localMatches.some(loc => loc.name === ext.name));
+                    const newExternal = externalResults.filter(ext => !localMatches.some(loc => loc.name.toLowerCase() === ext.name.toLowerCase()));
 
                     // Combine with metadata for UI
+                    // Map local matches to results regardless of specific status check, just pass source based on status
+                    const localResults = localMatches.map(v => ({
+                        ...v,
+                        source: v.status === 'APPROVED' ? 'APPROVED' : 'PENDING' // Default to PENDING if not explicitly APPROVED for UI badge purposes, but show it!
+                    }));
+
                     setVenueSearchResults([
-                        ...approved.map(v => ({ ...v, source: 'APPROVED' as const })),
-                        ...pending.map(v => ({ ...v, source: 'PENDING' as const })),
+                        ...localResults,
                         ...newExternal.map(v => ({ ...v, source: 'EXTERNAL' as const, status: 'PENDING', id: undefined }))
                     ] as any[]);
 
@@ -292,7 +298,10 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
             const updates: Partial<Event> = {};
             updates.seriesId = seriesId;
 
-            if (!dirtyFields.has('title')) updates.title = selectedSeries.title;
+            if (!dirtyFields.has('title')) {
+                updates.title = selectedSeries.title;
+                updates.useSeriesTitle = true; // Default to using Series Title
+            }
             if (!dirtyFields.has('description') && selectedSeries.description) updates.description = selectedSeries.description;
             // Handle DJs
             if (!dirtyFields.has('djIds') && selectedSeries.djIds && selectedSeries.djIds.length > 0) {
@@ -308,6 +317,16 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
             }
             // Handle Image
             if (!dirtyFields.has('imageUrl') && selectedSeries.posterUrl) updates.imageUrl = selectedSeries.posterUrl;
+
+            // Handle Template Data (Times & Vibes)
+            if (!dirtyFields.has('startTime') && selectedSeries.defaultStartTime) updates.startTime = selectedSeries.defaultStartTime;
+            if (!dirtyFields.has('endTime') && selectedSeries.defaultEndTime) updates.endTime = selectedSeries.defaultEndTime;
+            if (!dirtyFields.has('vibeTags') && selectedSeries.defaultVibes) updates.vibeTags = selectedSeries.defaultVibes;
+
+            // Recurrence Defaults
+            if (selectedSeries.isRecurring) {
+                updates.isRecurringInstance = true;
+            }
 
             return { ...prev, ...updates };
         });
@@ -400,6 +419,17 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
         }
     };
 
+    // Helper to calculate next date
+    const getNextDate = (currentDateStr: string, frequency: 'WEEKLY' | 'MONTHLY' = 'WEEKLY'): string => {
+        const date = new Date(currentDateStr);
+        if (frequency === 'WEEKLY') {
+            date.setDate(date.getDate() + 7);
+        } else {
+            date.setMonth(date.getMonth() + 1);
+        }
+        return date.toISOString().split('T')[0];
+    };
+
     const handleSaveEvent = async () => {
         if (!currentUserId && !editingEvent.ownerId) return;
 
@@ -417,7 +447,20 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
             return;
         }
 
+        if (!editingEvent.venueName?.trim()) {
+            alert("Please select or enter a Venue.");
+            return;
+        }
+
         try {
+            // Determine Title: If using series title, ensure we save the raw title as the series title 
+            // OR we just keep the boolean flag and render logic handles it? 
+            // Better: Store the title explicitly. If user checked "Use Series Title", we copy it over
+            // JUST IN CASE they edited the text input but left the box checked. 
+            // Actually, if they edit input, valid behavior is to trust input. Toggle just helps autofill.
+            // BUT requirement is "ensure that only one necessary title appears...". 
+            // So we save `useSeriesTitle` flag.
+
             const cleanData: any = {
                 ...editingEvent,
                 ownerId: editingEvent.ownerId || currentUserId,
@@ -455,6 +498,111 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                 await createEvent(cleanData, currentUserId);
             }
 
+            // AUTO-CREATION LOGIC
+            // If this event is recurring, create the next one in PENDING state
+            if ((editingEvent.isRecurringInstance || editingEvent.allowRepeats)) {
+                // Find associated series for frequency rules
+                const seriesData = series.find(s => s.id === editingEvent.seriesId);
+                const shouldAutoCreate = seriesData?.autoCreate !== false;
+                const freq = seriesData?.frequency || 'WEEKLY';
+
+                if (shouldAutoCreate && seriesData && cleanData.status !== 'PENDING') {
+                    // CALCULATE NEXT DATE (Strict)
+                    // Logic: Find the next occurrence of the series dayOfWeek / weekOfMonth relative to cleanData.date
+                    // If simple weekly, find next dayOfWeek.
+                    let nextDateObj = new Date(cleanData.date + "T00:00:00");
+
+                    if (freq === 'WEEKLY') {
+                        // If series defines a day, us it. Else add 7 days (legacy fallback)
+                        if (seriesData.dayOfWeek !== undefined) {
+                            // Move at least 1 day forward (so if cleanData is Tue and dayOfWeek is Tue, we want NEXT Tue)
+                            nextDateObj.setDate(nextDateObj.getDate() + 1);
+                            // Advance until day matches
+                            while (nextDateObj.getDay() !== seriesData.dayOfWeek) {
+                                nextDateObj.setDate(nextDateObj.getDate() + 1);
+                            }
+                        } else {
+                            nextDateObj.setDate(nextDateObj.getDate() + 7);
+                        }
+                    } else if (freq === 'MONTHLY') {
+                        // Simple +1 Month for now, or sophisticated weekOfMonth if needed. 
+                        // Assuming +1 month to keep somewhat consistent if no complex rule.
+                        nextDateObj.setMonth(nextDateObj.getMonth() + 1);
+                    }
+
+                    const nextDateStr = nextDateObj.toLocaleDateString('en-CA'); // YYYY-MM-DD
+
+                    // DUPLICATE CHECK
+                    // Check if an event already exists for this series on this target date
+                    // Filter mainly by seriesId and date. Status doesn't matter (if it's already Ready coverage is good too).
+                    const duplicateExists = events.some(e =>
+                        e.seriesId === seriesData.id &&
+                        e.date === nextDateStr &&
+                        !e.isArchived // Ignore archived, we might want to recreate
+                    );
+
+                    if (!duplicateExists) {
+                        // PREPARE DRAFT (Inherit from SERIES, not current event edits)
+                        const draftEvent: Omit<Event, 'id'> = {
+                            ownerId: currentUserId || editingEvent.ownerId || '',
+                            title: seriesData.title, // Reset to Series Title
+                            description: seriesData.description,
+                            date: nextDateStr,
+                            startTime: seriesData.defaultStartTime || '21:00',
+                            endTime: seriesData.defaultEndTime || '02:00',
+
+                            // Venue: Re-fetch venue details ideally, or assume ID link is sufficient?
+                            // Best to re-resolve name.
+                            venueId: seriesData.venueId,
+                            venueName: '', // Will be filled below if ID exists
+
+                            imageUrl: seriesData.posterUrl || DEFAULT_EVENT_IMAGES[0],
+
+                            // Series Link
+                            seriesId: seriesData.id,
+                            useSeriesTitle: true,
+                            isRecurringInstance: true,
+
+                            // Settings
+                            status: 'PENDING',
+                            isPublic: false,
+                            isLive: false,
+                            acceptingRequests: false,
+
+                            vibeTags: seriesData.defaultVibes || [],
+                            genreTags: [],
+                            searchSources: ['SPOTIFY'],
+                            allowLexiconSearch: false,
+                            allowSpotifySearch: true,
+
+                            distance: '', // Cleared
+
+                            djName: '', // Placeholder
+                        };
+
+                        // Helper to hydrate venue name if ID exists
+                        if (draftEvent.venueId) {
+                            const v = venues.find(v => v.id === draftEvent.venueId);
+                            if (v) {
+                                draftEvent.venueName = v.name;
+                                draftEvent.distance = v.address || '';
+                                draftEvent.latitude = v.latitude;
+                                draftEvent.longitude = v.longitude;
+                            }
+                        }
+
+                        try {
+                            await createEvent(draftEvent as any, currentUserId);
+                            console.log("Auto-created clean draft for", nextDateStr);
+                        } catch (err) {
+                            console.error("Auto-creation failed", err);
+                        }
+                    } else {
+                        console.log("Skipping auto-creation: Event already exists for", nextDateStr);
+                    }
+                }
+            }
+
             // Ensure venue creation logic for manual edits (not manual requests which logic handles already)
             if (cleanData.venueName) {
                 const existingVenue = venues.find(v => v.name.toLowerCase() === cleanData.venueName.toLowerCase());
@@ -474,6 +622,20 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
         } catch (e) {
             console.error(e);
             alert("Error saving event: " + e);
+        }
+    };
+
+    const handleDeleteEvent = async () => {
+        if (!editingEvent.id) return;
+        if (window.confirm("Are you sure you want to delete this event? This action cannot be undone.")) {
+            try {
+                await deleteEvent(editingEvent.id);
+                if (onSave) onSave();
+                onClose();
+            } catch (error: any) {
+                console.error("Delete failed", error);
+                alert("Failed to delete event: " + (error.message || "Unknown error"));
+            }
         }
     };
 
@@ -571,16 +733,39 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
 
                     <div className="space-y-4">
                         {/* Title */}
-                        <div>
+                        {/* Title & Series Toggle */}
+                        <div className="space-y-2">
                             <label className="text-xs text-slate-400 block mb-1">Event Title <span className="text-red-500">*</span></label>
+
+                            {editingEvent.seriesId && (
+                                <div className="flex items-center gap-2 mb-2 p-2 bg-slate-950 border border-slate-800 rounded">
+                                    <input
+                                        type="checkbox"
+                                        checked={editingEvent.useSeriesTitle || false}
+                                        onChange={e => {
+                                            const useSeries = e.target.checked;
+                                            setEditingEvent(prev => ({
+                                                ...prev,
+                                                useSeriesTitle: useSeries,
+                                                title: useSeries ? (series.find(s => s.id === prev.seriesId)?.title || prev.title) : prev.title
+                                            }));
+                                            markDirty('title');
+                                        }}
+                                        className="w-4 h-4 rounded border-slate-700 bg-slate-900 accent-purple-600"
+                                    />
+                                    <span className="text-xs text-slate-300">Use Series Title</span>
+                                </div>
+                            )}
+
                             <input
-                                className="w-full bg-slate-950 p-3 rounded border border-slate-700 text-white"
+                                className={`w-full bg-slate-950 p-3 rounded border border-slate-700 text-white ${editingEvent.useSeriesTitle ? 'opacity-50' : ''}`}
                                 value={editingEvent.title || ''}
                                 onChange={e => {
-                                    setEditingEvent({ ...editingEvent, title: e.target.value });
+                                    setEditingEvent({ ...editingEvent, title: e.target.value, useSeriesTitle: false });
                                     markDirty('title');
                                 }}
                                 placeholder="e.g. Summer Vibes 2024"
+                                disabled={editingEvent.useSeriesTitle}
                             />
                         </div>
 
@@ -628,6 +813,27 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                                         </p>
                                     )}
                                 </div>
+                            </div>
+
+                            {/* RECURRENCE TOGGLE FOR EVENT */}
+                            <div className="pt-2 border-t border-slate-800">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        checked={editingEvent.isRecurringInstance || false}
+                                        onChange={e => {
+                                            setEditingEvent(prev => ({ ...prev, isRecurringInstance: e.target.checked }));
+                                            markDirty('isRecurringInstance');
+                                        }}
+                                        className="w-4 h-4 rounded border-slate-700 bg-slate-900 accent-purple-600"
+                                    />
+                                    <span className="text-xs font-bold text-slate-300">Repeat / Recurring Event?</span>
+                                </div>
+                                {editingEvent.isRecurringInstance && (
+                                    <p className="text-[10px] text-slate-500 mt-1 pl-6">
+                                        We'll automatically create a draft for the next occurrence when you save.
+                                    </p>
+                                )}
                             </div>
                         </div>
 
@@ -929,13 +1135,28 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                     </div>
 
                     {/* Footer */}
-                    <div className="flex gap-3 pt-4 border-t border-slate-800">
-                        <button onClick={handleSaveEvent} className="flex-1 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition shadow-lg shadow-purple-900/20">
-                            {editingEvent.id ? 'Save Changes' : 'Create Event'}
-                        </button>
-                        <button onClick={onClose} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition">
-                            Cancel
-                        </button>
+                    <div className="pt-4 border-t border-slate-800 flex justify-between items-center px-1">
+                        {/* Delete Button (Left side, only if editing) */}
+                        <div>
+                            {editingEvent.id && (
+                                <button
+                                    onClick={handleDeleteEvent}
+                                    className="px-4 py-2 text-red-500 hover:text-red-400 font-bold text-sm hover:bg-red-900/20 rounded-lg transition"
+                                >
+                                    Delete Event
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Main Actions (Right side) */}
+                        <div className="flex gap-3">
+                            <button onClick={onClose} className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition">
+                                Cancel
+                            </button>
+                            <button onClick={handleSaveEvent} className="px-8 py-3 bg-purple-600 hover:bg-purple-500 text-white font-bold rounded-xl transition shadow-lg shadow-purple-900/20">
+                                {editingEvent.id ? 'Save Changes' : 'Create Event'}
+                            </button>
+                        </div>
                     </div>
 
                 </div>

@@ -27,11 +27,17 @@ export const ExplorePage: React.FC = () => {
         const lowerSearch = searchTerm.toLowerCase();
         switch (activeTab) {
             case 'EVENTS':
-                return events.filter(e =>
-                    e.title.toLowerCase().includes(lowerSearch) ||
-                    e.venueName.toLowerCase().includes(lowerSearch) ||
-                    e.djName.toLowerCase().includes(lowerSearch)
-                );
+                return events.filter(e => {
+                    const venue = venues.find(v => v.name === e.venueName || v.id === e.venueId);
+                    // VISIBILITY RULE: Venue MUST be APPROVED for event to be public
+                    const isVenueApproved = venue && venue.status === 'APPROVED';
+
+                    return isVenueApproved && (
+                        e.title.toLowerCase().includes(lowerSearch) ||
+                        e.venueName.toLowerCase().includes(lowerSearch) ||
+                        e.djName.toLowerCase().includes(lowerSearch)
+                    );
+                });
             case 'SERIES':
                 return series.filter(s =>
                     s.title.toLowerCase().includes(lowerSearch) ||

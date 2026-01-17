@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { UserProfile, SocialLink, DjRequestStatus } from '../types';
 import { Mic, X, Plus, Trash2, Check, AlertTriangle, ExternalLink, Music } from 'lucide-react';
 import { submitDjApplication, processDjApplication, updateUserProfile } from '../services/firebase';
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth to check current user permissions
+import { isAdmin } from '../utils/adminUtils';
 
 interface DjApplicationModalProps {
     user: UserProfile;
@@ -22,6 +24,7 @@ export const DjApplicationModal: React.FC<DjApplicationModalProps> = ({ user, is
     const [bio, setBio] = useState('');
     const [links, setLinks] = useState<SocialLink[]>([]);
     const [vibes, setVibes] = useState<string[]>([]);
+    const [role, setRole] = useState<string>('LISTENER'); // Role State
     const [newPlatform, setNewPlatform] = useState<SocialLink['platform']>('Instagram');
     const [newUrl, setNewUrl] = useState('');
     const [vibeInput, setVibeInput] = useState('');
@@ -35,6 +38,7 @@ export const DjApplicationModal: React.FC<DjApplicationModalProps> = ({ user, is
             setBio(user.bio || '');
             setLinks(user.socialLinks || []);
             setVibes(user.vibes || []);
+            setRole(user.role || 'LISTENER');
             // If viewing existing application, start in read-only unless applying fresh
             if (isReviewMode || user.djStatus === 'PENDING' || user.djStatus === 'APPROVED') {
                 setIsEditing(false);
@@ -101,7 +105,8 @@ export const DjApplicationModal: React.FC<DjApplicationModalProps> = ({ user, is
             setIsSubmitting(true);
             if (isReviewMode || user.djStatus === 'APPROVED' || user.djStatus === 'PENDING') {
                 // Update Profile (Admin or User update)
-                await updateUserProfile(user.id, { bio, socialLinks: links, vibes });
+                // Include ROLE update if it changed
+                await updateUserProfile(user.id, { bio, socialLinks: links, vibes, role });
                 setIsEditing(false);
                 alert("Profile Updated");
             } else {
@@ -162,12 +167,36 @@ export const DjApplicationModal: React.FC<DjApplicationModalProps> = ({ user, is
 
                     {/* Status Badge (Review Mode) */}
                     {isReviewMode && (
-                        <div className="bg-slate-800 p-4 rounded-xl flex items-center gap-3 border border-slate-700">
-                            <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.name}&background=random`} alt={user.name} className="w-12 h-12 rounded-full" />
-                            <div>
-                                <div className="font-bold text-white text-lg">{user.name}</div>
-                                <div className="text-slate-400 text-sm">Current Status: <span className={`font-bold ${user.djStatus === 'PENDING' ? 'text-yellow-500' : user.djStatus === 'APPROVED' ? 'text-green-500' : 'text-slate-500'}`}>{user.djStatus || 'NONE'}</span></div>
+                        <div className="bg-slate-800 p-4 rounded-xl flex items-center justify-between border border-slate-700">
+                            <div className="flex items-center gap-3">
+                                <img src={user.avatarUrl || `https://ui-avatars.com/api/?name=${user.name}&background=random`} alt={user.name} className="w-12 h-12 rounded-full" />
+                                <div>
+                                    <div className="font-bold text-white text-lg">{user.name}</div>
+                                    <div className="text-slate-400 text-sm">Status: <span className={`font-bold ${user.djStatus === 'PENDING' ? 'text-yellow-500' : user.djStatus === 'APPROVED' ? 'text-green-500' : 'text-slate-500'}`}>{user.djStatus || 'NONE'}</span></div>
+                                </div>
                             </div>
+
+                            {/* Role Selector (Admin Only) */}
+                            {adminMode && isEditing && (
+                                <div className="flex flex-col items-end">
+                                    <label className="text-[10px] uppercase font-bold text-slate-500 mb-1">System Role</label>
+                                    <select
+                                        value={role}
+                                        onChange={e => setRole(e.target.value)}
+                                        className="bg-slate-900 border border-slate-600 text-white text-xs rounded p-1"
+                                    >
+                                        <option value="LISTENER">Listener</option>
+                                        <option value="DJ">DJ</option>
+                                        <option value="ADMIN">Admin</option>
+                                    </select>
+                                </div>
+                            )}
+                            {adminMode && !isEditing && (
+                                <div className="text-right">
+                                    <div className="text-[10px] uppercase font-bold text-slate-500">Role</div>
+                                    <div className="font-bold text-white">{role}</div>
+                                </div>
+                            )}
                         </div>
                     )}
 

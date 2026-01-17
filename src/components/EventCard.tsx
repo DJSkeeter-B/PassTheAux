@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Headphones, Clock, CornerDownRight, LogOut, Music, Edit2, ArrowRight } from 'lucide-react';
+import { MapPin, Headphones, Clock, CornerDownRight, LogOut, Music, Edit2, ArrowRight, Repeat } from 'lucide-react';
 import { Event } from '../types';
 import { checkInUser, checkOutUser } from '../services/firebase';
 import { ConfirmationModal } from './ConfirmationModal';
@@ -21,16 +21,6 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
 
     const isCheckedInHere = userCheckedInEventId === event.id;
     const isCheckedInElsewhere = !!userCheckedInEventId && !isCheckedInHere;
-
-    // Series Volume Logic
-    const volStr = React.useMemo(() => {
-        if (!event.seriesId || !events.length) return null;
-        const seriesEvents = events.filter(e => e.seriesId === event.seriesId);
-        if (seriesEvents.length <= 1) return null;
-        seriesEvents.sort((a, b) => a.date.localeCompare(b.date));
-        const idx = seriesEvents.findIndex(e => e.id === event.id);
-        return idx >= 0 ? `Vol. ${idx + 1}` : null;
-    }, [event.id, event.seriesId, events]);
 
     const [confirmModal, setConfirmModal] = useState<{
         isOpen: boolean;
@@ -93,20 +83,30 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
         }
     };
 
-    const handleDetailsClick = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        navigate(`/event/${event.id}`);
-    };
+    // Pending Status Check
+    const isPending = event.status === 'PENDING' || (!event.isPublic && user?.id === event.ownerId);
 
     return (
         <div
             onClick={handleCardClick}
-            className="bg-slate-900 rounded-xl overflow-hidden border border-slate-800 cursor-pointer hover:border-purple-500/50 transition shadow-md group relative h-32 flex"
+            className={`bg-slate-900 rounded-xl overflow-hidden border cursor-pointer transition shadow-md group relative h-32 flex
+                ${isPending
+                    ? 'border-yellow-500/80 shadow-[0_0_15px_-3px_rgba(234,179,8,0.3)]'
+                    : 'border-slate-800 hover:border-purple-500/50'
+                }
+            `}
         >
             {/* Image Section - Left 1/3 */}
             <div className="w-1/3 relative overflow-hidden h-full">
                 <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-500" />
                 <div className="absolute inset-0 bg-gradient-to-r from-transparent to-slate-900/80 md:to-transparent" />
+
+                {/* Pending Overlay Badge */}
+                {isPending && (
+                    <div className="absolute top-2 left-2 bg-yellow-500 text-black text-[10px] font-bold px-1.5 py-0.5 rounded shadow-lg z-20">
+                        DRAFT
+                    </div>
+                )}
             </div>
 
             {/* Details Section - Right 2/3 */}
@@ -116,7 +116,10 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
                     {/* Title */}
                     <div className="flex items-baseline gap-2 mb-1 pr-8">
                         <h3 className="font-bold text-lg text-white leading-tight line-clamp-2">{event.title}</h3>
-                        {volStr && <span className="text-[10px] uppercase font-bold text-purple-400 bg-purple-900/30 px-1.5 rounded">{volStr}</span>}
+                        {/* Repeat Icon for Series Events */}
+                        {event.seriesId && (
+                            <Repeat size={14} className="text-green-500 shrink-0 mt-1" />
+                        )}
                     </div>
 
                     {/* Info Grid */}
@@ -149,15 +152,6 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
 
             {/* Quick Action Button - Absolute Right Bottom */}
             <div className="absolute top-1/2 -translate-y-1/2 right-2 flex flex-col gap-2 z-20">
-
-                {/* 1. Explicit Details Button */}
-                <button
-                    onClick={handleDetailsClick}
-                    className="p-2.5 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700 hover:border-slate-500"
-                    title="View Event Details"
-                >
-                    <ArrowRight size={16} />
-                </button>
 
                 {/* 2. Check In / Out Button */}
                 <button
