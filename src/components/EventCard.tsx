@@ -205,17 +205,10 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
                     )}
                 </div>
 
-                <button
-                    onClick={handleQuickAction}
-                    className={`p-2.5 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center
-                            ${isCheckedInHere
-                            ? 'bg-red-900/20 text-red-500 hover:bg-red-500 hover:text-white border border-red-900/50'
-                            : 'bg-slate-800 text-green-400 hover:bg-green-500 hover:text-black border border-slate-700 hover:border-green-400'
-                        }`}
-                    {/* Visual helper for "Active" */}
-                    {isCheckedInHere && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-green-500 box-content blur-[1px]" />
-                    )}
+                {/* Visual helper for "Active" */}
+                {isCheckedInHere && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-green-500 box-content blur-[1px]" />
+                )}
 
                 <ConfirmationModal
                     isOpen={confirmModal.isOpen}
