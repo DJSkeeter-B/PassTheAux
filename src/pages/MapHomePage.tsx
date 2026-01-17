@@ -442,6 +442,7 @@ export const MapHomePage: React.FC = () => {
                                 return (
                                     <div key={item.id} className="min-w-[280px] max-w-[300px] snap-center">
                                         <EventCard
+                                            event={item.data}
                                             userCheckedInEventId={user?.checkedInEventId}
                                         />
                                     </div>

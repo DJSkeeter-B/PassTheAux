@@ -225,43 +225,21 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
                         title="Edit Event"
                     >
                         <Edit2 size={14} />
-                    </button>
-                )}
-            </div>
+                    </div>
 
             {/* Visual helper for "Active" */}
-            {isCheckedInHere && (
-                <div className="absolute bottom-0 left-0 right-0 h-1 bg-green-500 box-content blur-[1px]" />
-            )}
+                {isCheckedInHere && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-green-500 box-content blur-[1px]" />
+                )}
 
-<<<<<<< HEAD
-    <ConfirmationModal
-        isOpen={confirmModal.isOpen}
-        title={confirmModal.title}
-        message={confirmModal.message}
-        isDestructive={confirmModal.isDestructive}
-        onConfirm={confirmModal.onConfirm}
-        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
-    />
+                <ConfirmationModal
+                    isOpen={confirmModal.isOpen}
+                    title={confirmModal.title}
+                    message={confirmModal.message}
+                    isDestructive={confirmModal.isDestructive}
+                    onConfirm={confirmModal.onConfirm}
+                    onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+                />
             </div >
-=======
-
-                {/* Visual helper for "Active" */}
-                {
-                    isCheckedInHere && (
-                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-green-500 box-content blur-[1px]" />
-                    )
-                }
-            </div >
-            <ConfirmationModal
-                isOpen={confirmModal.isOpen}
-                title={confirmModal.title}
-                message={confirmModal.message}
-                isDestructive={confirmModal.isDestructive}
-                onConfirm={confirmModal.onConfirm}
-                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
-            />
->>>>>>> serato-track-listening
-        </div >
-    );
+            );
 };
