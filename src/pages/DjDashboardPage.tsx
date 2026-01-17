@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, Users, QrCode, Settings, Layers } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -8,11 +8,11 @@ import { subscribeToQueue, subscribeToCheckedInUsers, updateSongStatus, toggleEv
 import { Song, SongStatus, UserProfile } from '../types';
 import { SongCard } from '../components/SongCard';
 import { EventModal } from '../components/EventModal';
-import { DjCrateWidget } from '../components/DjCrateWidget';
 
 export const DjDashboardPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
     const { events } = useData();
     const [queue, setQueue] = useState<Song[]>([]);
@@ -23,15 +23,15 @@ export const DjDashboardPage: React.FC = () => {
     // Duplicate state for editing to satisfy EventModal interface
     const [editingEvent, setEditingEvent] = useState<any>({});
 
-    // Electron Floating State
-    const [isFloating, setIsFloating] = useState(false);
-    const isElectron = !!window.electronAPI;
+    const isElectron = !!(window as any).electronAPI;
 
+    // Navigate to Crate Mode (External Route)
     const toggleFloatingMode = async () => {
-        if (!window.electronAPI) return;
-        const newState = !isFloating;
-        setIsFloating(newState);
-        await window.electronAPI.toggleFloating(newState);
+        if (!isElectron) return;
+        if (id) {
+            await (window as any).electronAPI.toggleFloating(true);
+            navigate(`/crate/${id}`);
+        }
     };
 
     const event = events.find(e => e.id === id);
@@ -68,16 +68,6 @@ export const DjDashboardPage: React.FC = () => {
     };
 
     if (!event) return <div className="p-10 text-white">Event not found or loading...</div>;
-
-    // CRAVITY MODE: Render the Widget if floating
-    if (isFloating) {
-        return (
-            <DjCrateWidget
-                eventId={id!}
-                onCloseWidget={toggleFloatingMode} // Toggling off returns to main window
-            />
-        );
-    }
 
     return (
         <div className="h-screen flex flex-col pb-20 bg-slate-950">
@@ -127,8 +117,8 @@ export const DjDashboardPage: React.FC = () => {
                     {isElectron && (
                         <button
                             onClick={toggleFloatingMode}
-                            className={`p-2 hover:bg-slate-700 rounded transition-colors ${isFloating ? 'bg-blue-500/10 text-blue-400' : 'bg-slate-800 text-slate-400'}`}
-                            title="Toggle Floating Mode"
+                            className={`p-2 hover:bg-slate-700 rounded transition-colors bg-slate-800 text-slate-400`}
+                            title="Open Crate Mode Widget"
                         >
                             <Layers size={18} />
                         </button>

@@ -1,7 +1,7 @@
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, MapPin, QrCode, BookOpen, Headphones, Layers } from 'lucide-react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { ArrowLeft, MapPin, QrCode, BookOpen, Headphones, Layers, X } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { checkInUser, checkOutUser, getSeriesById } from '../services/firebase';
@@ -32,10 +32,12 @@ export const EventDetailsPage: React.FC = () => {
     // ... params ...
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { user } = useAuth();
     const { events, loading } = useData();
     const [series, setSeries] = useState<Series | null>(null);
     const [showQrModal, setShowQrModal] = useState(false);
+    const [showFullImage, setShowFullImage] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Partial<Event>>({});
 
@@ -144,18 +146,32 @@ export const EventDetailsPage: React.FC = () => {
 
     return (
         <div className="space-y-6 pb-20 relative bg-slate-950 min-h-screen">
-            <div className="relative h-64 bg-slate-800 rounded-b-3xl overflow-hidden shadow-2xl">
-                <img src={event.imageUrl} alt={event.title} className="w-full h-full object-cover" />
+            <div
+                className="relative h-64 bg-slate-800 rounded-b-3xl overflow-hidden shadow-2xl cursor-pointer group"
+                onClick={() => setShowFullImage(true)}
+            >
+                <img
+                    src={event.imageUrl}
+                    alt={event.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition duration-700"
+                />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-900/40 to-transparent"></div>
 
                 <button
-                    onClick={() => navigate('/')}
-                    className="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur rounded-full text-white hover:bg-black/60 transition"
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        if ((location.state as any)?.from === 'explore') {
+                            navigate('/explore', { state: { tab: (location.state as any)?.tab } });
+                        } else {
+                            navigate('/');
+                        }
+                    }}
+                    className="absolute top-4 left-4 p-2 bg-black/40 backdrop-blur rounded-full text-white hover:bg-black/60 transition z-10"
                 >
                     <ArrowLeft size={24} />
                 </button>
 
-                <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent">
+                <div className="absolute bottom-0 left-0 p-6 w-full bg-gradient-to-t from-slate-950 via-slate-900/60 to-transparent pointer-events-none">
                     <h2 className="text-3xl font-bold text-white mb-1 leading-none drop-shadow-lg">{event.title}</h2>
 
                     {/* Prominent DJ Display */}
@@ -169,11 +185,11 @@ export const EventDetailsPage: React.FC = () => {
                     </div>
                 </div>
                 {/* Edit & QR Buttons */}
-                <div className="absolute top-4 right-4 flex gap-2">
+                <div className="absolute top-4 right-4 flex gap-2 z-10">
                     {/* Edit Button (Owner Only) */}
                     {user?.id === event.ownerId && (
                         <button
-                            onClick={() => { setEditingEvent(event); setShowEventModal(true); }}
+                            onClick={(e) => { e.stopPropagation(); setEditingEvent(event); setShowEventModal(true); }}
                             className="p-2 bg-white/10 backdrop-blur rounded-full hover:bg-white/20 text-white"
                             title="Edit Event"
                         >
@@ -183,7 +199,7 @@ export const EventDetailsPage: React.FC = () => {
 
                     {event.customQrImageUrl ? (
                         <button
-                            onClick={() => setShowQrModal(true)}
+                            onClick={(e) => { e.stopPropagation(); setShowQrModal(true); }}
                             className="p-2 bg-white/10 backdrop-blur rounded-full hover:bg-white/20 text-white"
                             title="Show Event QR"
                         >
@@ -191,7 +207,7 @@ export const EventDetailsPage: React.FC = () => {
                         </button>
                     ) : (
                         <button
-                            onClick={() => setShowQrModal(true)}
+                            onClick={(e) => { e.stopPropagation(); setShowQrModal(true); }}
                             className="p-2 bg-white/10 backdrop-blur rounded-full hover:bg-white/20 text-white"
                             title="Show Event QR"
                         >
@@ -202,7 +218,7 @@ export const EventDetailsPage: React.FC = () => {
                     {/* CRATE MODE TOGGLE (Electron & DJ only) */}
                     {(window.electronAPI && (user?.role === 'ADMIN' || user?.id === event.ownerId || event.djIds?.includes(user?.id || ''))) && (
                         <button
-                            onClick={toggleCrateMode}
+                            onClick={(e) => { e.stopPropagation(); toggleCrateMode(); }}
                             className="p-2 bg-blue-500/20 backdrop-blur rounded-full hover:bg-blue-500/40 text-blue-200 border border-blue-400/30"
                             title="Open Crate (Float Mode)"
                         >
@@ -214,7 +230,7 @@ export const EventDetailsPage: React.FC = () => {
 
             <div className="px-4 space-y-6">
                 {series && (
-                    <div onClick={() => navigate(`/series/${series.id}`)} className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg flex items-center justify-between cursor-pointer hover:bg-blue-900/30 transition">
+                    <div onClick={() => navigate(`/series/${series.id}`, { state: (location.state as any) })} className="bg-blue-900/20 border border-blue-500/30 p-3 rounded-lg flex items-center justify-between cursor-pointer hover:bg-blue-900/30 transition">
                         <div className="flex items-center gap-2 text-blue-400">
                             <BookOpen size={16} />
                             <span className="text-xs font-bold uppercase tracking-wide">Part of Series: {series.title}</span>
@@ -299,6 +315,28 @@ export const EventDetailsPage: React.FC = () => {
                     onClose={() => setShowQrModal(false)}
                 />
             )}
+
+            {/* Full Screen Image Viewer */}
+            {showFullImage && (
+                <div
+                    className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4 backdrop-blur-sm"
+                    onClick={() => setShowFullImage(false)}
+                >
+                    <button
+                        onClick={() => setShowFullImage(false)}
+                        className="absolute top-6 right-6 p-3 bg-white/10 hover:bg-white/20 rounded-full text-white transition"
+                    >
+                        <X size={24} />
+                    </button>
+                    <img
+                        src={event.imageUrl}
+                        alt={event.title}
+                        className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                </div>
+            )}
+
             <ConfirmationModal
                 isOpen={confirmModal.isOpen}
                 title={confirmModal.title}

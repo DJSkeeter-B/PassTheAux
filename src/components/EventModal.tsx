@@ -106,7 +106,8 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
     const [venueSearchTerm, setVenueSearchTerm] = useState('');
 
     // Wizard State
-    const [step, setStep] = useState(editingEvent.id ? 2 : 1); // 1 = Series Context, 2 = Details
+    // If seriesId is provided (even for new event), skip step 1
+    const [step, setStep] = useState((editingEvent.id || editingEvent.seriesId) ? 2 : 1);
 
     // New Modal State
     const [showSeriesModal, setShowSeriesModal] = useState(false);
@@ -251,6 +252,16 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
         }, 500);
         return () => clearTimeout(timer);
     }, [venueSearchTerm, venues]);
+
+    // Apply Series Data on Mount if pre-selected (New Event Context)
+    useEffect(() => {
+        if (!editingEvent.id && editingEvent.seriesId && step === 2) {
+            // Check if we need to apply data (if title is empty)
+            if (!editingEvent.title) {
+                applySeriesData(editingEvent.seriesId);
+            }
+        }
+    }, []); // Run once on mount
 
 
     // --- HANDLERS ---

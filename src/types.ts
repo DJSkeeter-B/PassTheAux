@@ -106,6 +106,13 @@ export interface Event {
   geoRestrictionEnabled?: boolean; // If true, requires user to be within 2km
   autoStartRequests?: boolean; // If true, requests open automatically/stay open
   vibeTags?: string[]; // Phase 9: Vibe Tags
+  stats?: {
+    approved: number;
+    pending: number;
+    rejected: number;
+    unavailable?: number;
+    played?: number;
+  };
 }
 
 export interface LexiconConfig {

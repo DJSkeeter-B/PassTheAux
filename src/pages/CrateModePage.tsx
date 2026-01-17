@@ -11,14 +11,13 @@ export const CrateModePage: React.FC = () => {
         const isElectron = !!(window as any).electronAPI;
         if (isElectron) {
             await (window as any).electronAPI.toggleFloating(false);
-            // Wait a brief moment or ensure main process handles resizing back
         }
 
-        // 2. Navigate back to Event Details
+        // 2. Navigate back to DJ Dashboard (Queue)
         if (id) {
-            navigate(`/event/${id}`);
+            navigate(`/dj/event/${id}`);
         } else {
-            navigate('/');
+            navigate('/dj');
         }
     };
 

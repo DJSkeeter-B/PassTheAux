@@ -1,16 +1,19 @@
 
 import React, { useState, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Calendar, MapPin, Music, ArrowLeft, ChevronDown, Clock, Activity, Heart, Share2 } from 'lucide-react';
 import { groupEventsByDate } from '../utils/dateUtils';
 import { Series } from '../types';
 import { QRCodeModal } from '../components/QRCodeModal';
+import { EventModal } from '../components/EventModal';
+import { Event } from '../types';
 
 export const EventSeriesPage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { series, events, venues } = useData();
     const { user } = useAuth();
 
@@ -19,6 +22,8 @@ export const EventSeriesPage: React.FC = () => {
     const [showSeriesDropdown, setShowSeriesDropdown] = useState(false);
     const [activeStat, setActiveStat] = useState<'EVENTS' | 'REQUESTS' | 'VIBE'>('EVENTS');
     const [showShareModal, setShowShareModal] = useState(false);
+    const [showEventModal, setShowEventModal] = useState(false);
+    const [editingEvent, setEditingEvent] = useState<Partial<Event>>({});
 
     // Get current series
     const currentSeries = series.find(s => s.id === id);
@@ -111,7 +116,13 @@ export const EventSeriesPage: React.FC = () => {
                 {/* Top Header Bar */}
                 <div className="absolute top-0 left-0 right-0 z-30 p-4 flex items-center gap-4 bg-gradient-to-b from-black/80 to-transparent">
                     <button
-                        onClick={() => navigate('/dj')}
+                        onClick={() => {
+                            if ((location.state as any)?.from === 'explore') {
+                                navigate('/explore', { state: { tab: (location.state as any)?.tab } });
+                            } else {
+                                navigate('/dj');
+                            }
+                        }}
                         className="p-2 bg-black/40 backdrop-blur-md rounded-full text-white hover:bg-black/60 transition"
                     >
                         <ArrowLeft size={20} />
@@ -309,7 +320,10 @@ export const EventSeriesPage: React.FC = () => {
                             <Calendar className="mx-auto mb-2 text-slate-600" size={32} />
                             <p className="text-slate-500 font-bold">No upcoming events scheduled.</p>
                             <button
-                                onClick={() => navigate('/dj')}
+                                onClick={() => {
+                                    setEditingEvent({ seriesId: currentSeries.id });
+                                    setShowEventModal(true);
+                                }}
                                 className="mt-2 text-xs text-purple-400 hover:text-purple-300 font-bold"
                             >
                                 + Create Event
@@ -363,6 +377,19 @@ export const EventSeriesPage: React.FC = () => {
                     />
                 )
             }
+
+            {showEventModal && (
+                <EventModal
+                    editingEvent={editingEvent}
+                    setEditingEvent={setEditingEvent}
+                    onClose={() => setShowEventModal(false)}
+                    currentUserId={user?.id}
+                    series={mySeries}
+                    onSave={() => {
+                        // Refresh data is handled by context subscriptions mostly, but good to know it saved
+                    }}
+                />
+            )}
         </div >
     );
 };

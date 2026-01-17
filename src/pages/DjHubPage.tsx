@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
 import { Series, Event } from '../types';
-import { subscribeToSeries, subscribeToAllSeries } from '../services/firebase';
+import { subscribeToSeries, subscribeToAllSeries, updateUserProfile } from '../services/firebase';
 import { getAllTracksSample } from '../services/lexiconService';
 import { groupEventsByDate } from '../utils/dateUtils';
 import { LogOut, Bell, Plus, Calendar, Edit2, Headphones, Layers, Minimize2, Maximize2, X, Music } from 'lucide-react';
@@ -302,12 +302,45 @@ export const DjHubPage: React.FC = () => {
                                                 </div>
 
                                                 <div className="flex items-center gap-2">
-                                                    <button className={`
-                                                        px-3 py-1.5 rounded-lg text-xs font-bold transition
-                                                        ${isPast ? 'bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-slate-300' : 'bg-purple-600/10 text-purple-400 hover:bg-purple-600 hover:text-white'}
-                                                    `}>
-                                                        {isPast ? 'History' : 'Dashboard'}
-                                                    </button>
+                                                    {isPast ? (
+                                                        <button className="px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-800 text-slate-500 hover:bg-slate-700 hover:text-slate-300">
+                                                            History
+                                                        </button>
+                                                    ) : (
+                                                        <div className="flex gap-2">
+                                                            <button
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    navigate(`/event/${evt.id}`);
+                                                                }}
+                                                                className="px-3 py-1.5 rounded-lg text-xs font-bold transition bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white"
+                                                            >
+                                                                Event Info
+                                                            </button>
+                                                            <button
+                                                                onClick={async (e) => {
+                                                                    e.stopPropagation();
+                                                                    if (user?.id) {
+                                                                        await updateUserProfile(user.id, { checkedInEventId: evt.id });
+                                                                    }
+                                                                    if (isElectron) {
+                                                                        // Use dedicated Crate Mode route for transparent shell
+                                                                        navigate(`/crate/${evt.id}`);
+                                                                        // Also trigger the float immediately (though page load will do resize)
+                                                                        if ((window as any).electronAPI) {
+                                                                            await (window as any).electronAPI.toggleFloating(true);
+                                                                        }
+                                                                    } else {
+                                                                        navigate(`/dj/event/${evt.id}`);
+                                                                    }
+                                                                }}
+                                                                className="px-3 py-1.5 rounded-lg text-xs font-bold transition bg-purple-600/10 text-purple-400 hover:bg-purple-600 hover:text-white flex items-center gap-1"
+                                                            >
+                                                                {isElectron ? <Layers size={14} /> : null}
+                                                                {isElectron ? 'Crate Mode' : 'Queue'}
+                                                            </button>
+                                                        </div>
+                                                    )}
 
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); setEditingEvent(evt); setShowEventModal(true); }}

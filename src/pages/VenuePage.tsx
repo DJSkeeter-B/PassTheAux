@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../contexts/DataContext';
 import { MapPin, Calendar, Users, Activity, Layers, Music, ArrowLeft } from 'lucide-react';
 import { Event } from '../types';
@@ -7,6 +7,7 @@ import { Event } from '../types';
 export const VenuePage: React.FC = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
+    const location = useLocation();
     const { venues, events, series } = useData();
 
     // Data Filtering
@@ -78,9 +79,16 @@ export const VenuePage: React.FC = () => {
                     <div className="absolute inset-0 bg-gradient-to-br from-blue-900/40 to-slate-900" />
                 )}
 
+
                 <div className="absolute top-0 left-0 p-4 z-30">
                     <button
-                        onClick={() => navigate(-1)}
+                        onClick={() => {
+                            if ((location.state as any)?.from === 'explore') {
+                                navigate('/explore', { state: { tab: (location.state as any)?.tab } });
+                            } else {
+                                navigate(-1);
+                            }
+                        }}
                         className="p-2 bg-black/40 backdrop-blur-md rounded-full text-white hover:bg-black/60 transition"
                     >
                         <ArrowLeft size={20} />
