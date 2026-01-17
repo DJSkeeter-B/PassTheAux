@@ -205,20 +205,63 @@ export const EventCard: React.FC<EventCardProps> = ({ event, userCheckedInEventI
                     )}
                 </div>
 
-                {/* Visual helper for "Active" */}
-                {isCheckedInHere && (
-                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-green-500 box-content blur-[1px]" />
-                )}
+                <button
+                    onClick={handleQuickAction}
+                    className={`p-2.5 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center
+                            ${isCheckedInHere
+                            ? 'bg-red-900/20 text-red-500 hover:bg-red-500 hover:text-white border border-red-900/50'
+                            : 'bg-slate-800 text-green-400 hover:bg-green-500 hover:text-black border border-slate-700 hover:border-green-400'
+                        }`}
+                    title={isCheckedInHere ? "Check Out" : "Check In"}
+                >
+                    {isCheckedInHere ? <LogOut size={16} /> : <CornerDownRight size={16} />}
+                </button>
 
-                <ConfirmationModal
-                    isOpen={confirmModal.isOpen}
-                    title={confirmModal.title}
-                    message={confirmModal.message}
-                    isDestructive={confirmModal.isDestructive}
-                    onConfirm={confirmModal.onConfirm}
-                    onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
-                />
+                {/* 3. EDIT Button (Only if Owner and onEdit provided) */}
+                {onEdit && user?.id === event.ownerId && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); onEdit(event); }}
+                        className="p-2 rounded-full shadow-lg transition-all active:scale-95 flex items-center justify-center bg-slate-800 text-slate-400 hover:bg-slate-700 hover:text-white border border-slate-700 hover:border-slate-500 text-xs"
+                        title="Edit Event"
+                    >
+                        <Edit2 size={14} />
+                    </button>
+                )}
             </div>
-        </div>
+
+            {/* Visual helper for "Active" */}
+            {isCheckedInHere && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-green-500 box-content blur-[1px]" />
+            )}
+
+<<<<<<< HEAD
+    <ConfirmationModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        isDestructive={confirmModal.isDestructive}
+        onConfirm={confirmModal.onConfirm}
+        onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+    />
+            </div >
+=======
+
+                {/* Visual helper for "Active" */}
+                {
+                    isCheckedInHere && (
+                        <div className="absolute bottom-0 left-0 right-0 h-1 bg-green-500 box-content blur-[1px]" />
+                    )
+                }
+            </div >
+            <ConfirmationModal
+                isOpen={confirmModal.isOpen}
+                title={confirmModal.title}
+                message={confirmModal.message}
+                isDestructive={confirmModal.isDestructive}
+                onConfirm={confirmModal.onConfirm}
+                onClose={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))}
+            />
+>>>>>>> serato-track-listening
+        </div >
     );
 };

@@ -66,11 +66,11 @@ export const EventSeriesPage: React.FC = () => {
     // Split into Upcoming and Past
     const { upcoming, past } = useMemo(() => {
         const now = new Date();
-        // Reset time to start of today for comparison so "Today's" events count as upcoming
+        // Reset time to start of today for comparison
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-        const up = seriesEvents.filter(e => new Date(e.date) >= today);
-        const p = seriesEvents.filter(e => new Date(e.date) < today).reverse(); // Most recent past first
+        const up = seriesEvents.filter(e => new Date(e.date + 'T00:00:00') >= today);
+        const p = seriesEvents.filter(e => new Date(e.date + 'T00:00:00') < today).reverse();
 
         return { upcoming: up, past: p };
     }, [seriesEvents]);
@@ -296,8 +296,8 @@ export const EventSeriesPage: React.FC = () => {
                                 >
                                     <div className="flex items-center gap-4">
                                         <div className="w-12 h-12 bg-slate-800 rounded-lg flex flex-col items-center justify-center border border-slate-700">
-                                            <span className="text-[10px] text-slate-400 uppercase font-bold">{new Date(evt.date).toLocaleString('default', { month: 'short' })}</span>
-                                            <span className="text-xl font-black text-white leading-none">{new Date(evt.date).getDate()}</span>
+                                            <span className="text-[10px] text-slate-400 uppercase font-bold">{new Date(evt.date + 'T00:00:00').toLocaleString('default', { month: 'short' })}</span>
+                                            <span className="text-xl font-black text-white leading-none">{new Date(evt.date + 'T00:00:00').getDate()}</span>
                                         </div>
                                         <div>
                                             <h4 className="font-bold text-white group-hover:text-purple-400 transition">{evt.title}</h4>
@@ -348,7 +348,7 @@ export const EventSeriesPage: React.FC = () => {
                                 >
                                     <div className="flex items-center gap-4">
                                         <div className="text-slate-500 font-mono text-xs w-20">
-                                            {new Date(evt.date).toLocaleDateString()}
+                                            {new Date(evt.date + 'T00:00:00').toLocaleDateString()}
                                         </div>
                                         <div>
                                             <h4 className="font-bold text-slate-300 group-hover:text-white transition">{evt.title}</h4>

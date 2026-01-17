@@ -279,7 +279,7 @@ export const DjHubPage: React.FC = () => {
                                                         {/* For Past events, the DATE is crucial. Start with it. */}
                                                         <div className={`flex items-center gap-1 ${isPast ? 'text-slate-300 font-medium' : ''}`}>
                                                             <Calendar size={12} />
-                                                            <span>{new Date(evt.date).toDateString()}</span>
+                                                            <span>{new Date(evt.date + 'T00:00:00').toDateString()}</span>
                                                         </div>
 
                                                         {!isPast && (
