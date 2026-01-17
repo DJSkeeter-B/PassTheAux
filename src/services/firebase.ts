@@ -992,7 +992,8 @@ export const addSongRequest = async (song: Omit<Song, 'id'>) => {
     try {
       const eventRef = doc(db, "events", song.eventId);
       await updateDoc(eventRef, {
-        requestCount: increment(1)
+        requestCount: increment(1),
+        "stats.pending": increment(1)
       });
     } catch (e) {
       console.error("Failed to increment request count", e);
@@ -1001,7 +1002,39 @@ export const addSongRequest = async (song: Omit<Song, 'id'>) => {
 };
 
 export const updateSongStatus = async (songId: string, status: SongStatus) => {
-  await updateDoc(doc(db, "songs", songId), { status });
+  await runTransaction(db, async (transaction) => {
+    const songRef = doc(db, "songs", songId);
+    const songSnap = await transaction.get(songRef);
+
+    if (!songSnap.exists()) throw new Error("Song not found");
+    const song = songSnap.data() as Song;
+    const oldStatus = song.status;
+
+    if (oldStatus === status) return; // No change
+
+    // Update Song
+    transaction.update(songRef, { status });
+
+    // Update Event Stats
+    if (song.eventId) {
+      const eventRef = doc(db, "events", song.eventId);
+      const updates: any = {};
+
+      // Decrement Old Status
+      if (oldStatus === 'PENDING') updates["stats.pending"] = increment(-1);
+      if (oldStatus === 'APPROVED') updates["stats.approved"] = increment(-1);
+      if (oldStatus === 'REJECTED') updates["stats.rejected"] = increment(-1);
+
+      // Increment New Status
+      if (status === 'PENDING') updates["stats.pending"] = increment(1);
+      if (status === 'APPROVED') updates["stats.approved"] = increment(1);
+      if (status === 'REJECTED') updates["stats.rejected"] = increment(1);
+
+      if (Object.keys(updates).length > 0) {
+        transaction.update(eventRef, updates);
+      }
+    }
+  });
 };
 
 export const voteSong = async (songId: string, direction: 'up' | 'down', userId: string) => {

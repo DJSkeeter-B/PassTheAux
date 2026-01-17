@@ -425,7 +425,10 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                 isLive: editingEvent.isLive ?? false,
                 isPublic: editingEvent.isPublic ?? true,
                 status: 'READY', // Default to READY
-                date: editingEvent.date || new Date().toISOString().split('T')[0],
+                date: editingEvent.date || (() => {
+                    const now = new Date();
+                    return now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+                })(),
                 venueName: editingEvent.venueName || '',
                 description: editingEvent.description || '',
                 imageUrl: editingEvent.imageUrl || DEFAULT_EVENT_IMAGES[0],
@@ -621,12 +624,19 @@ export const EventModal: React.FC<EventModalProps> = ({ editingEvent, setEditing
                                         }}
                                     />
                                     {/* Ends Next Day Hint */}
-                                    {editingEvent.startTime && editingEvent.endTime && editingEvent.endTime < editingEvent.startTime && (
-                                        <p className="text-[10px] text-purple-400 mt-1.5 flex items-center gap-1">
-                                            <CornerDownRight size={10} />
-                                            Ends following day
-                                        </p>
-                                    )}
+                                    {(() => {
+                                        const start = editingEvent.startTime || '21:00';
+                                        const end = editingEvent.endTime || '02:00';
+                                        if (end < start) {
+                                            return (
+                                                <p className="text-[10px] text-purple-400 mt-1.5 flex items-center gap-1">
+                                                    <CornerDownRight size={10} />
+                                                    Ends following day
+                                                </p>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                 </div>
                             </div>
                         </div>

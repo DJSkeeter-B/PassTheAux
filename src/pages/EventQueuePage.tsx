@@ -20,6 +20,7 @@ export const EventQueuePage: React.FC = () => {
     const [showPauseModal, setShowPauseModal] = useState(false);
     const [showEventModal, setShowEventModal] = useState(false);
     const [editingEvent, setEditingEvent] = useState<Partial<Event>>({});
+    const [activeMenuSongId, setActiveMenuSongId] = useState<string | null>(null);
 
     // CRATE MODE STATE REMOVED (Using Route)
 
@@ -209,14 +210,20 @@ export const EventQueuePage: React.FC = () => {
                         </div>
                     )}
                 </div>
-                <div className="text-xs text-slate-500 font-medium px-2 py-1 bg-slate-800 rounded">
-                    {queue.length} Songs
+                {/* Stats Row */}
+                <div className="flex items-center gap-3 text-[10px] font-bold bg-slate-900/50 px-3 py-1.5 rounded-full border border-slate-800">
+                    <div className="flex items-center gap-1" title="Approved">
+                        <span className="text-green-500">●</span> {queue.filter(s => s.status === 'APPROVED' || s.status === 'PLAYED').length}
+                    </div>
+                    <div className="flex items-center gap-1" title="Rejected / Unavailable">
+                        <span className="text-red-500">●</span> {queue.filter(s => s.status === 'REJECTED' || s.status === 'UNAVAILABLE').length}
+                    </div>
+                    <div className="flex items-center gap-1" title="Pending">
+                        <span className="text-yellow-500">●</span> {queue.filter(s => s.status === 'PENDING').length}
+                    </div>
                 </div>
-                {user?.checkedInEventId === id && (
-                    <button onClick={handleCheckOut} className="ml-2 bg-red-900/50 p-2 rounded text-red-300 hover:text-white">
-                        <LogOut size={16} />
-                    </button>
-                )}
+
+
             </div>
 
             {event && (
@@ -230,12 +237,19 @@ export const EventQueuePage: React.FC = () => {
                         <h3 className="text-sm font-bold text-white leading-none truncate">{event.title}</h3>
                         <p className="text-[10px] text-slate-400 truncate">@{event.venueName}</p>
                     </div>
-                    {/* Status Indicator */}
-                    {effectiveAcceptingRequests ? (
-                        <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Requests Open"></div>
-                    ) : (
-                        <div className="w-2 h-2 rounded-full bg-red-500" title="Requests Paused"></div>
-                    )}
+                    {/* Status Indicator & Check Out */}
+                    <div className="flex items-center gap-3">
+                        {effectiveAcceptingRequests ? (
+                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Requests Open"></div>
+                        ) : (
+                            <div className="w-2 h-2 rounded-full bg-red-500" title="Requests Paused"></div>
+                        )}
+                        {user?.checkedInEventId === id && (
+                            <button onClick={handleCheckOut} className="bg-red-900/20 hover:bg-red-900/50 p-1.5 rounded-full text-red-400/70 hover:text-red-400 transition" title="Leave Event">
+                                <LogOut size={14} />
+                            </button>
+                        )}
+                    </div>
                 </div>
             )}
 
@@ -284,6 +298,9 @@ export const EventQueuePage: React.FC = () => {
                             onReject={(id) => handleDJAction(id, 'REJECT')}
                             onUnavailable={(id) => handleDJAction(id, 'UNAVAILABLE')}
                             onMarkPlayed={(id) => handleDJAction(id, 'PLAYED')}
+                            isMenuOpen={activeMenuSongId === song.id}
+                            onToggleMenu={() => setActiveMenuSongId(prev => prev === song.id ? null : song.id)}
+                            onReset={(id) => { updateSongStatus(id, SongStatus.PENDING); setActiveMenuSongId(null); }}
                         />
                     ))
                 )}
