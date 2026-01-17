@@ -11,6 +11,7 @@ import { EventSearchPage } from './src/pages/EventSearchPage';
 import { AdminDashboardPage } from './src/pages/AdminDashboardPage';
 import { DjHubPage } from './src/pages/DjHubPage';
 import { EventSeriesPage } from './src/pages/EventSeriesPage';
+import { DjDashboardPage } from './src/pages/DjDashboardPage';
 import { BottomNav } from './src/components/BottomNav';
 import { GlobalHeader } from './src/components/GlobalHeader';
 import { ProfilePage } from './src/pages/ProfilePage';
@@ -113,6 +114,12 @@ const AppLayout = () => {
                 <Route path="/dj" element={
                     <ProtectedRoute allowedRoles={['DJ', 'ADMIN']}>
                         <DjHubPage />
+                    </ProtectedRoute>
+                } />
+
+                <Route path="/dj/event/:id" element={
+                    <ProtectedRoute allowedRoles={['DJ', 'ADMIN']}>
+                        <DjDashboardPage />
                     </ProtectedRoute>
                 } />
 

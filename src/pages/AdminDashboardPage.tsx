@@ -797,10 +797,13 @@ const AdminDashboardContent: React.FC = () => {
                         <h4 className="font-bold text-slate-400 text-xs uppercase mb-3">System Actions</h4>
                         <button
                             onClick={async () => {
+                                console.log("Wipe button clicked");
                                 if (window.confirm("CRITICAL WARNING: This will delete ALL Events and Song Requests from the database. This cannot be undone. Are you sure?")) {
+                                    console.log("User confirmed wipe warning");
 
                                     // SECURITY CHECK: Master Admin Password
                                     const masterPassword = config.adminPassword;
+                                    console.log("Config admin password exists?", !!masterPassword);
 
                                     if (!masterPassword) {
                                         alert("Error: No Master Admin Password set in System Config. Please set one first.");
@@ -808,16 +811,21 @@ const AdminDashboardContent: React.FC = () => {
                                     }
 
                                     const input = prompt("Enter Master Admin Password to confirm wipe:");
+                                    console.log("User entered password length:", input?.length);
 
                                     if (input === masterPassword) {
                                         try {
-                                            await resetEventsAndRequests();
+                                            console.log("Calling resetEventsAndRequests...");
+                                            const result = await resetEventsAndRequests();
+                                            console.log("Reset result:", result);
                                             alert("System Reset Complete. All events and requests have been wiped.");
                                             window.location.reload();
                                         } catch (e: any) {
+                                            console.error("Reset Failed Error:", e);
                                             alert("Reset Failed: " + e.message);
                                         }
                                     } else {
+                                        console.log("Password mismatch");
                                         alert("Incorrect Password. Action Cancelled.");
                                     }
                                 }

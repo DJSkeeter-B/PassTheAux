@@ -430,9 +430,6 @@ export const MapHomePage: React.FC = () => {
                                         <EventCard
                                             event={item.data}
                                             userCheckedInEventId={user?.checkedInEventId}
-                                            onCardClick={() => {
-                                                if (item.data.venueId) setSelectedVenueIds([item.data.venueId]);
-                                            }}
                                         />
                                     </div>
                                 );
