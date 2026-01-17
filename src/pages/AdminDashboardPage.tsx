@@ -342,7 +342,7 @@ const AdminDashboardContent: React.FC = () => {
                                                                 await markAsViewed(notif.type === 'NEW_EVENT' ? 'events' : 'series', notif.id);
                                                             } catch (err: any) {
                                                                 console.error("Dismiss failed", err);
-                                                                alert(`Failed to dismiss: ${err.message}`);
+                                                                alert(`Failed to dismiss: ${err.message || "Unknown error"}`);
                                                             }
                                                         }}
                                                         title="Dismiss"

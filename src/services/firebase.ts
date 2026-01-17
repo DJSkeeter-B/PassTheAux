@@ -845,6 +845,11 @@ export const resetEventsAndRequests = async () => {
 };
 
 export const markAsViewed = async (collectionName: 'events' | 'series', docId: string) => {
+  if (collectionName === 'events') {
+    // Use Admin Cloud Function to bypass rules for Events
+    return updateEventAsAdmin(docId, { hasAdminViewed: true });
+  }
+  // Fallback for Series (or if we add updateSeriesAdmin later)
   await updateDoc(doc(db, collectionName, docId), {
     hasAdminViewed: true
   });
